@@ -62,7 +62,7 @@ canvas{display:block;margin:0 auto;background:#fafbfc;border-radius:6px}
 <div id="helpModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center;">
   <div style="background:white;border-radius:8px;max-width:800px;max-height:90vh;width:90%;overflow-y:auto;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,0.3);">
     <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #0b3d66;padding-bottom:10px;margin-bottom:15px;">
-      <h2 style="margin:0;color:#0b3d66">📚 Hjelp - Seilrute Pro v1.0</h2>
+      <h2 style="margin:0;color:#0b3d66">📚 Hjelp - Set Sail</h2>
       <button onclick="hideHelp()" style="background:#c92a2a;padding:5px 12px;font-size:14px;">✕ Lukk</button>
     </div>
     
@@ -178,10 +178,11 @@ canvas{display:block;margin:0 auto;background:#fafbfc;border-radius:6px}
 <header>
 <h1>Seilrute Pro v1.0</h1>
 <div>
-<button onclick="clearRoute()">Tom rute</button>
-<button class="sec" onclick="removeLast()">Fjern siste</button>
+<button onclick="clearRoute()">Tøm rute</button>
+<button class="sec" onclick="removeLast()">Fjern siste WP</button>
 <button class="ok" onclick="calculateRoute()">Beregn</button>
-<button onclick="showHelp()" style="background:#0d6efd">📚 Hjelp</button>
+<button onclick="window.open('https://github.com/DITT-andreharrang-lab/SetSail/blob/main/README.md', '_blank')" style="background:#0d6efd">📚 Hjelp</button>
+<button onclick="window.open('https://github.com/DITT-andreharrang-lab/SetSail/issues/new', '_blank')" style="background:#fd7e14">💬 Tilbakemelding</button>
 </div>
 </header>
 </header>
