@@ -1,0 +1,2 @@
+# SetSail
+Seilings planlegger
