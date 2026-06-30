@@ -1,0 +1,1978 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<title>Seilrute Pro v8</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:'Segoe UI',system-ui,sans-serif;background:#f3f5f7;color:#1c2733}
+header{background:#0b3d66;color:#fff;padding:8px 16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+header h1{font-size:15px;margin:0}
+.layout{display:grid;grid-template-columns:1fr 460px;gap:8px;height:calc(100vh - 50px);padding:8px}
+#map{width:100%;height:100%;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,.15);background:#cfd8dc}
+.sidebar{display:flex;flex-direction:column;gap:8px;overflow-y:auto}
+.card{background:#fff;border-radius:8px;padding:10px;box-shadow:0 2px 6px rgba(0,0,0,.08)}
+.card h2{font-size:12px;margin:0 0 6px;color:#0b3d66;text-transform:uppercase;letter-spacing:.5px}
+button{background:#0b3d66;color:#fff;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:12px;margin:2px}
+button.sec{background:#6c757d} button.ok{background:#2b8a3e} button.warn{background:#c92a2a}
+button:hover{opacity:.9}
+select,input{padding:4px;border:1px solid #ccc;border-radius:3px;font-size:12px;width:100%}
+.row{display:flex;gap:6px;align-items:center;margin-bottom:5px}
+.row label{flex:0 0 100px;font-size:11px;color:#555}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.stat{background:#eaf2f8;padding:6px;border-radius:5px;text-align:center}
+.stat .val{font-size:15px;font-weight:bold;color:#0b3d66}
+.stat .lbl{font-size:10px;text-transform:uppercase;color:#555}
+#segments{font-size:11px;max-height:300px;overflow-y:auto}
+#segments div{padding:4px;border-bottom:1px solid #eee}
+iframe{width:100%;height:200px;border:0;border-radius:6px}
+canvas{display:block;margin:0 auto;background:#fafbfc;border-radius:6px}
+.tideBox{font-size:11px;background:#f0f4f7;padding:5px;border-radius:4px;max-height:140px;overflow-y:auto}
+#orcList{max-height:200px;overflow-y:auto;font-size:11px;border:1px solid #ddd;border-radius:4px;padding:4px}
+#orcList div{padding:3px;cursor:pointer;border-bottom:1px solid #eee}
+#orcList div:hover{background:#e3f2fd}
+#routeList{font-size:12px}
+#routeList div{display:flex;justify-content:space-between;padding:3px;border-bottom:1px solid #eee}
+.badge{display:inline-block;padding:1px 6px;border-radius:8px;background:#0b3d66;color:#fff;font-size:10px;margin-left:4px}
+.vmg{color:#c92a2a;font-weight:bold}
+.warn-box{display:none;padding:6px 10px;font-size:12px;border-bottom:1px solid}
+#fatalWarn{background:#f8d7da;color:#721c24;border-color:#f5c6cb}
+#tileWarn{background:#fff3cd;color:#856404;border-color:#ffeaa7}
+#fileWarn{background:#cce5ff;color:#004085;border-color:#b8daff}
+.help{font-size:11px;color:#666;background:#f8f9fa;padding:6px;border-radius:4px;border-left:3px solid #0b3d66}
+.sail-only{background:#d3f9d8;color:#2b8a3e;padding:3px 6px;border-radius:3px;font-size:10px;font-weight:bold;display:inline-block;margin-left:4px}
+.current-effect{font-size:11px;padding:4px;border-radius:3px;margin-top:4px;font-weight:bold;text-align:center}
+.current-help{background:#d3f9d8;color:#2b8a3e}
+.current-hurt{background:#ffe3e3;color:#c92a2a}
+.current-neutral{background:#f0f4f7;color:#555}
+#wwResults{font-size:11px;max-height:300px;overflow-y:auto;margin-top:6px}
+.ww-row{display:flex;align-items:center;gap:4px;padding:3px;border-bottom:1px solid #eee;cursor:pointer}
+.ww-row:hover{background:#f0f4f7}
+.ww-bar{height:18px;background:#74c0fc;border-radius:2px}
+.ww-bar.best{background:#2b8a3e}
+.ww-bar.worst{background:#c92a2a}
+.ww-time{font-family:monospace;font-size:10px;width:90px;flex-shrink:0}
+.ww-eta{font-family:monospace;font-size:10px;width:60px;flex-shrink:0;text-align:right}
+</style>
+</head>
+<body>
+<header>
+<h1>Seilrute Pro v8</h1>
+<div>
+<button onclick="clearRoute()">Tom rute</button>
+<button class="sec" onclick="removeLast()">Fjern siste</button>
+<button class="ok" onclick="calculateRoute()">Beregn</button>
+</div>
+</header>
+<div id="fatalWarn" class="warn-box"></div>
+<div id="fileWarn" class="warn-box">Kjorer via file:// - bygg som Electron-app for full funksjonalitet.</div>
+<div id="tileWarn" class="warn-box">Kart kunne ikke lastes - bytt kartlag.</div>
+
+<div class="layout">
+<div id="map"></div>
+<div class="sidebar">
+
+<div class="card">
+<div class="help">Tips: 1) Klikk i kartet for waypoints. 2) Sett avgangstid, motorfart og min seilfart. 3) Lange etapper deles automatisk i delsegmenter.<br>
+🌊 <b>Bølge-fargekoder:</b> 
+<span style="color:#0b3d66">&lt; 1.5 m (OK)</span> | 
+<span style="color:#fd7e14">1.5-2.5 m (krevende)</span> | 
+<span style="color:#c92a2a">&gt; 2.5 m (farlig)</span></div>
+</div>
+
+<div class="card">
+	<h2>Reisetidspunkt og fart</h2>
+	<div class="row"><label>Avgang</label><input type="datetime-local" id="departureTime"></div>
+	<div class="row"><label>Motorfart kn</label><input type="number" id="motorSpeed" placeholder="Blank = kun seil" step="0.1" min="0"></div>
+	<div class="row"><label>Min seilfart kn</label><input type="number" id="minSailSpeed" placeholder="0 = ingen min" step="0.1" min="0" value="4"></div>
+	<div class="row"><label>Maks segment NM</label><input type="number" id="maxSegmentNM" value="2" step="0.5" min="0.5"></div>
+	<div style="font-size:11px;color:#555">Motor starter automatisk hvis seilfart under min.</div>
+	<div class="row" style="margin-top:6px;">
+		<label style="flex:1;font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer;">
+		<input type="checkbox" id="showVmgPaths" checked style="width:auto;margin:0;"> Vis VMG-baner (slag/jibe) på kartet
+		</label>
+	</div>
+</div>
+
+
+<div class="card">
+<h2>Værvindu (+/-24t fra avgang)</h2>
+<div class="row"><label>Tidssteg (h)</label><input type="number" id="wwStep" value="2" min="1" max="6" step="1"></div>
+<div class="row">
+<button class="ok" onclick="findWeatherWindow()">Finn beste avgang</button>
+<button class="sec" onclick="clearWeatherWindow()">Tom</button>
+</div>
+<div id="wwStatus" style="font-size:11px;color:#555;margin-top:4px;"></div>
+<div id="wwResults"></div>
+</div>
+
+<div class="card">
+<h2>Isochroner</h2>
+<div class="row"><label>Max timer</label><input type="number" id="isoMaxHours" value="6" min="1" max="24" step="1"></div>
+<div class="row"><label>Tidssteg h</label><input type="number" id="isoStep" value="1" min="0.5" max="6" step="0.5"></div>
+<div class="row">
+<button class="ok" onclick="drawIsochrones()">Tegn isochroner</button>
+<button class="sec" onclick="clearIsochrones()">Tom</button>
+</div>
+<div id="isoStatus" style="font-size:11px;color:#555;margin-top:4px;"></div>
+</div>
+
+<div class="card">
+<h2>Lagrede ruter</h2>
+<div class="row"><input type="text" id="routeName" placeholder="Rutenavn..."><button class="ok" onclick="saveRoute()">Lagre</button></div>
+<div id="routeList"></div>
+</div>
+
+<div class="card">
+<h2>Resultat</h2>
+<div class="stats">
+<div class="stat"><div class="val" id="totalNM">0.00</div><div class="lbl">Total NM</div></div>
+<div class="stat"><div class="val" id="totalTime">--:--</div><div class="lbl">Tid m/strom</div></div>
+<div class="stat"><div class="val" id="totalTimeNoCurrent">--:--</div><div class="lbl">Tid u/strom</div></div>
+<div class="stat"><div class="val" id="currentDiff">--:--</div><div class="lbl">Diff strom</div></div>
+<div class="stat"><div class="val" id="avgWind">-</div><div class="lbl">Snitt vind</div></div>
+<div class="stat"><div class="val" id="avgSpeed">-</div><div class="lbl">Snitt SOG</div></div>
+<div class="stat"><div class="val" id="maxWave">-</div><div class="lbl">Maks bølge</div></div>
+</div>
+<div id="currentEffect" class="current-effect current-neutral">Klikk Beregn for strom-effekt</div>
+<div id="etaInfo" style="font-size:11px;color:#0b3d66;margin-top:6px;text-align:center;font-weight:bold;"></div>
+</div>
+
+<div class="card">
+<h2>Segmenter</h2>
+<div id="segments">Klikk i kartet for waypoints (min 2).</div>
+</div>
+
+<div class="card">
+<h2>Tidevann (Kartverket, ved start)</h2>
+<div class="tideBox" id="tideBox">Sett start-waypoint.</div>
+</div>
+
+<div class="card">
+<h2>Vind (Windy)</h2>
+<iframe id="windyFrame" src="https://embed.windy.com/embed2.html?lat=63&lon=10&zoom=7&level=surface&overlay=wind&menu=&type=map&metricWind=m/s"></iframe>
+</div>
+
+<div class="card">
+<h2>Bat og polardiagram</h2>
+<div class="row"><label>Bat</label><select id="boatSelect" onchange="onBoatChange()"></select></div>
+<div class="row"><label>.pol fil</label><input type="file" id="polFile" accept=".pol,.txt,.csv" onchange="loadPolFile(event)"></div>
+<canvas id="polarCanvas" width="400" height="400"></canvas>
+<div id="polarInfo" style="font-size:11px;color:#555;margin-top:4px;"></div>
+</div>
+
+<div class="card">
+<h2>ORC-database</h2>
+<div class="row"><label>Land</label>
+<select id="orcCountry">
+<option value="NOR">Norge</option>
+<option value="SWE">Sverige</option>
+<option value="DEN">Danmark</option>
+<option value="FIN">Finland</option>
+<option value="GER">Tyskland</option>
+<option value="GBR">Storbritannia</option>
+<option value="ITA">Italia</option>
+<option value="NED">Nederland</option>
+<option value="USA">USA</option>
+<option value="ALL">Alle</option>
+</select></div>
+<div class="row"><button onclick="loadORC()">Last ORC-data</button>
+<span id="orcStatus" style="font-size:11px;color:#555;"></span></div>
+<input type="text" id="orcSearch" placeholder="Sok battype..." oninput="filterORC()" style="margin:4px 0">
+<div id="orcList">Klikk "Last ORC-data" for a starte.</div>
+</div>
+
+</div></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+function setEl(id, text){
+  const el = document.getElementById(id);
+  if(el) el.textContent = text;
+}
+let calculatingRoute = false;
+
+function setHtml(id, html){
+  const el = document.getElementById(id);
+  if(el) el.innerHTML = html;
+}
+
+if (location.protocol === 'file:') document.getElementById('fileWarn').style.display = 'block';
+
+if (typeof L === "undefined") {
+  document.getElementById("fatalWarn").style.display = "block";
+  document.getElementById("fatalWarn").innerHTML = "Leaflet kunne ikke lastes. Sjekk internett.";
+  throw new Error("Leaflet not loaded");
+}
+
+const polars = {
+  "dufour40p": {
+    name: "Dufour 40 Performance (cruising)",
+    twsMs: [3,4,5,6,8,10,12],
+    twa: [40,52,60,75,90,110,120,135,150,165],
+    speeds: [
+      [2.2,3.0,3.6,3.8,4.0,4.1,4.1],[3.6,4.5,5.3,5.7,6.0,6.2,6.3],
+      [4.0,4.8,5.6,6.1,6.4,6.5,6.6],[4.2,5.0,6.0,6.5,6.7,6.9,7.0],
+      [4.1,4.9,5.9,6.5,6.9,7.2,7.4],[3.9,4.7,5.8,6.6,7.2,7.6,7.8],
+      [3.7,4.5,5.6,6.5,7.2,7.7,8.1],[3.2,4.0,5.0,6.0,6.9,7.6,8.1],
+      [2.6,3.2,4.3,5.3,6.2,6.9,7.6],[1.8,2.4,3.2,4.1,5.1,5.8,6.5]
+    ],
+    beatAngle: 42, beatVMG: [2.0,2.6,3.0,3.3,3.6,3.7,3.8],
+    gybeAngle: 160, runVMG: [1.6,2.2,2.7,3.2,4.0,4.5,5.0]
+  },
+  "j109": {
+    name: "J/109 (estimat)",
+    twsMs: [3,4,5,6,8,10,12],
+    twa: [40,52,60,75,90,110,120,135,150,165],
+    speeds: [
+      [2.7,3.7,4.3,4.6,4.8,4.9,4.9],[4.2,5.2,6.1,6.6,6.9,7.1,7.2],
+      [4.7,5.6,6.5,7.0,7.3,7.5,7.6],[4.9,5.8,6.9,7.4,7.7,7.9,8.0],
+      [4.8,5.7,6.8,7.5,7.9,8.2,8.4],[4.6,5.5,6.7,7.6,8.2,8.6,8.9],
+      [4.3,5.2,6.4,7.4,8.2,8.8,9.2],[3.8,4.6,5.8,6.9,7.9,8.7,9.2],
+      [3.1,3.8,5.0,6.1,7.1,7.9,8.6],[2.2,2.9,3.8,4.8,5.9,6.7,7.4]
+    ],
+    beatAngle: 40, beatVMG: [2.4,3.2,3.7,4.0,4.3,4.5,4.6],
+    gybeAngle: 160, runVMG: [1.9,2.5,3.2,3.8,4.6,5.2,5.8]
+  }
+};
+let currentPolar = polars["dufour40p"];
+
+const ORC_TWS_KN = [6,8,10,12,14,16,20];
+const ORC_TWA = [52,60,75,90,110,120,135,150];
+const KN_TO_MS = 0.514444;
+
+let waypoints = [], routeLine = null, vmgLines = [];
+let orcData = [], orcFiltered = [];
+let isochroneLayers = [];
+const windCache = new Map(), currentCache = new Map(), landCache = new Map();
+let lastWindFetch = 0, lastKnownWind = {speed: 5, dir: 180};
+
+function cacheKey(lat,lon,dateObj){
+  const la = Math.round(lat*10)/10, lo = Math.round(lon*10)/10;
+  const dt = dateObj.getFullYear()+String(dateObj.getMonth()+1).padStart(2,'0')+
+             String(dateObj.getDate()).padStart(2,'0')+String(dateObj.getHours()).padStart(2,'0');
+  return la+','+lo+','+dt;
+}
+
+async function rateLimit(){
+  const wait = Math.max(0, 200 - (Date.now() - lastWindFetch));
+  if(wait > 0) await new Promise(r=>setTimeout(r, wait));
+  lastWindFetch = Date.now();
+}
+
+function setDefaultDeparture(){
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  document.getElementById('departureTime').value = d.toISOString().slice(0,16);
+}
+setDefaultDeparture();
+
+const boatSelect = document.getElementById("boatSelect");
+function rebuildBoatSelect(){
+  boatSelect.innerHTML = "";
+  Object.entries(polars).forEach(([k,p])=>{
+    const o = document.createElement("option");
+    o.value = k; o.textContent = p.name;
+    boatSelect.appendChild(o);
+  });
+}
+rebuildBoatSelect();
+
+function onBoatChange(){
+  currentPolar = polars[boatSelect.value];
+  drawPolar();
+  if (waypoints.length >= 2) calculateRoute();
+}
+
+function loadPolFile(ev){
+  const f = ev.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = e => {
+    try {
+      const lines = e.target.result.trim().split(/\r?\n/).filter(l=>l.trim());
+      const header = lines[0].split(/[\s,;\t]+/).map(parseFloat);
+      const twsKn = header.slice(1);
+      const twa = [], speeds = [];
+      for(let i=1;i<lines.length;i++){
+        const p = lines[i].split(/[\s,;\t]+/).map(parseFloat);
+        twa.push(p[0]); speeds.push(p.slice(1));
+      }
+      polars["custom_"+f.name] = {
+        name: "FIL: "+f.name,
+        twsMs: twsKn.map(k=>k*KN_TO_MS),
+        twa, speeds,
+        beatAngle: 42, beatVMG: null, gybeAngle: 160, runVMG: null
+      };
+      rebuildBoatSelect();
+      boatSelect.value = "custom_"+f.name;
+      onBoatChange();
+    } catch(err){ alert("Feil ved .pol: "+err.message); }
+  };
+  r.readAsText(f);
+}
+
+async function loadORC(){
+  const c = document.getElementById('orcCountry').value;
+  const status = document.getElementById('orcStatus');
+  status.textContent = "Prøver ORC-database...";
+  
+  let all = null, kilde = null;
+  
+  // STRATEGI 1: Prøv offisiell ORC først
+  try {
+    const orcUrl = c === "ALL" 
+      ? 'https://data.orc.org/public/WPub.dll?action=DownRMS&ext=json&Family=ORC'
+      : 'https://data.orc.org/public/WPub.dll?action=DownRMS&CountryId='+c+'&ext=json&Family=ORC';
+    console.log("Prøver offisiell ORC: " + orcUrl);
+    const r = await fetch(orcUrl);
+    if(r.ok){
+      const data = await r.json();
+      // ORC returnerer {Rms: [...]} struktur
+      all = Array.isArray(data) ? data : (data.Rms || data.rms || []);
+      if(all.length > 0){
+        kilde = "ORC offisiell";
+        // Normaliser feltene siden ORC bruker NatAuth i stedet for country
+        all.forEach(b => {
+          if(!b.country && b.NatAuth) b.country = b.NatAuth;
+        });
+      }
+    }
+  } catch(e){
+    console.warn("ORC offisiell feilet (CORS?):", e.message);
+  }
+  
+  // STRATEGI 2: Hvis ORC ikke fungerer, prøv jieter-mirroret
+  if(!all || all.length === 0){
+    status.textContent = "Prøver jieter-mirror...";
+    const years = [2026, 2025, 2024];
+    for(const year of years){
+      try {
+        const r = await fetch('https://raw.githubusercontent.com/jieter/orc-data/master/ALL'+year+'.json');
+        if(r.ok){
+          all = await r.json();
+          kilde = "jieter " + year;
+          break;
+        }
+      } catch(e){ console.warn("Jieter " + year + " feilet:", e); }
+    }
+  }
+  
+  if(!all || all.length === 0){
+    status.textContent = "Feil - kunne ikke laste ORC-data fra noen kilde.";
+    return;
+  }
+  
+  // Filter på land
+  orcData = c === "ALL" ? all : all.filter(b => (b.country||"").toUpperCase() === c);
+  status.textContent = "("+kilde+") "+orcData.length+" av "+all.length+" båter.";
+  console.log("ORC ferdig:", orcData.length, "båter fra", kilde);
+  filterORC();
+}
+
+function filterORC(){
+  const q = (document.getElementById('orcSearch').value||"").toLowerCase();
+  orcFiltered = orcData.filter(b => {
+    const name = ((b.Class||"")+" "+(b.YachtName||"")+" "+(b.Builder||"")).toLowerCase();
+    return name.includes(q);
+  }).slice(0, 300);
+  const list = document.getElementById('orcList');
+  if(orcFiltered.length === 0){ list.innerHTML = "Ingen treff."; return; }
+  list.innerHTML = orcFiltered.map((b,i) =>
+    '<div onclick="selectORC('+i+')"><b>'+(b.Class||"?")+'</b> - '+(b.YachtName||"")+
+    ' <span class="badge">'+(b.SailNo||"")+'</span><br>'+
+    '<small style="color:#888">'+(b.Builder||"")+' '+(b.Age_Year||"")+'</small></div>'
+  ).join("");
+}
+
+function selectORC(idx){
+  const b = orcFiltered[idx];
+  const a = b.Allowances || {};
+  const speeds = ORC_TWA.map(twa => {
+    const arr = a["R"+twa];
+    if(!arr) return ORC_TWS_KN.map(()=>0);
+    return arr.map(s => s > 0 ? 3600/s : 0);
+  });
+  const beatA = (a.BeatAngle && a.BeatAngle[3]) || 42;
+  const gybeA = (a.GybeAngle && a.GybeAngle[3]) || 160;
+  const beatVMG = (a.Beat || []).map(s => s > 0 ? 3600/s : null);
+  const runVMG = (a.Run || []).map(s => s > 0 ? 3600/s : null);
+  polars["orc_"+(b.SailNo||Math.random())] = {
+    name: "ORC: "+(b.Class||"?")+" "+(b.YachtName||"")+" ("+(b.SailNo||"")+")",
+    twsMs: ORC_TWS_KN.map(k=>k*KN_TO_MS),
+    twa: ORC_TWA, speeds,
+    beatAngle: beatA, beatVMG: beatVMG.length ? beatVMG : null,
+    gybeAngle: gybeA, runVMG: runVMG.length ? runVMG : null
+  };
+  rebuildBoatSelect();
+  boatSelect.value = "orc_"+(b.SailNo||"");
+  onBoatChange();
+}
+
+function polarSpeed(twa, twsMs){
+  const P = currentPolar;
+  twa = Math.min(180, Math.max(0, Math.abs(twa)));
+  const minTws = P.twsMs[0];
+  if(twsMs < minTws) {
+    const findIdxTwa = (arr,v)=>{
+      if(v<=arr[0]) return [0,0,0];
+      if(v>=arr[arr.length-1]) return [arr.length-1,arr.length-1,0];
+      for(let i=0;i<arr.length-1;i++) if(v>=arr[i]&&v<=arr[i+1]) return [i,i+1,(v-arr[i])/(arr[i+1]-arr[i])];
+      return [0,0,0];
+    };
+    const [tA,tB,tF] = findIdxTwa(P.twa, twa);
+    const speedAtMin = (P.speeds[tA][0]||0) + ((P.speeds[tB][0]||0) - (P.speeds[tA][0]||0))*tF;
+    return speedAtMin * Math.pow(twsMs / minTws, 1.2);
+  }
+  const findIdx = (arr,v) => {
+    if(v<=arr[0]) return [0,0,0];
+    if(v>=arr[arr.length-1]) return [arr.length-1,arr.length-1,0];
+    for(let i=0;i<arr.length-1;i++) if(v>=arr[i]&&v<=arr[i+1]) return [i,i+1,(v-arr[i])/(arr[i+1]-arr[i])];
+    return [0,0,0];
+  };
+  const [tA,tB,tF] = findIdx(P.twa,twa);
+  const [sA,sB,sF] = findIdx(P.twsMs,twsMs);
+  const v00 = P.speeds[tA][sA]||0, v01 = P.speeds[tA][sB]||0;
+  const v10 = P.speeds[tB][sA]||0, v11 = P.speeds[tB][sB]||0;
+  return (v00+(v01-v00)*sF) + ((v10+(v11-v10)*sF)-(v00+(v01-v00)*sF))*tF;
+}
+
+function vmgRouting(twaDirect, twsMs, motorSpd, minSailSpd){
+  const P = currentPolar;
+  const beat = P.beatAngle || 42, gybe = P.gybeAngle || 160;
+  const hasMotor = motorSpd > 0;
+  const hasMinSail = minSailSpd > 0;
+  const directSpeed = polarSpeed(twaDirect, twsMs);
+
+const switchToMotor = (sailSpeed) => {
+  if(!hasMotor) return false;
+  // Hvis brukeren har satt min seilfart, er DEN eneste trigger for motor
+  if(hasMinSail) return sailSpeed < minSailSpd;
+  // Ingen min seilfart satt → bruk motorfart som baseline
+  return sailSpeed < motorSpd;
+};
+
+  let effSpeed, mode, vmg;
+  if (twaDirect < beat) {
+    const beatSpeed = polarSpeed(beat, twsMs);
+    effSpeed = beatSpeed * Math.cos((beat - twaDirect) * Math.PI/180);
+    mode = "VMG-slag "+beat.toFixed(0);
+    vmg = true;
+  } else if (twaDirect > gybe) {
+    const runSpeed = polarSpeed(gybe, twsMs);
+    effSpeed = runSpeed * Math.cos((twaDirect - gybe) * Math.PI/180);
+    mode = "VMG-jibe "+gybe.toFixed(0);
+    vmg = true;
+  } else {
+    effSpeed = directSpeed;
+    mode = "Seil direkte";
+    vmg = false;
+  }
+
+  if(switchToMotor(effSpeed)){
+    return {
+      speed: motorSpd,
+      mode: "Motor (seil "+effSpeed.toFixed(1)+" < min "+(hasMinSail?minSailSpd:motorSpd)+" kn)",
+      vmg: false, sailOnly: false, switched: true
+    };
+  }
+  return {
+    speed: Math.max(0.05, effSpeed),
+    mode: mode, vmg: vmg, sailOnly: !hasMotor, switched: false
+  };
+}
+
+function drawPolar(){
+  const c = document.getElementById("polarCanvas"), ctx = c.getContext("2d");
+  const W = c.width, H = c.height, cx = W/2, cy = H/2;
+  ctx.clearRect(0,0,W,H);
+  const P = currentPolar;
+  const flat = P.speeds.flat().filter(v=>v>0);
+  const maxSp = Math.max(...flat,1)*1.1, R = Math.min(W,H)/2-30;
+  ctx.strokeStyle = "#ddd"; ctx.fillStyle = "#888"; ctx.font = "10px sans-serif";
+  for(let s=2;s<=Math.ceil(maxSp);s+=2){
+    const r = (s/maxSp)*R;
+    ctx.beginPath(); ctx.arc(cx,cy,r,0,2*Math.PI); ctx.stroke();
+    ctx.fillText(s+"kn", cx+4, cy-r);
+  }
+  for(let a=0;a<360;a+=30){
+    const rad = (a-90)*Math.PI/180;
+    ctx.beginPath(); ctx.moveTo(cx,cy);
+    ctx.lineTo(cx+R*Math.cos(rad), cy+R*Math.sin(rad)); ctx.stroke();
+    ctx.fillText(a, cx+(R+10)*Math.cos(rad)-8, cy+(R+10)*Math.sin(rad)+4);
+  }
+  const colors = ["#74c0fc","#4dabf7","#339af0","#1c7ed6","#1971c2","#1864ab","#0b3d66"];
+  P.twsMs.forEach((tws,ti) => {
+    ctx.strokeStyle = colors[ti%colors.length]; ctx.lineWidth = 2; ctx.beginPath();
+    for(let i=0;i<P.twa.length;i++){
+      const v = P.speeds[i][ti]||0, r = (v/maxSp)*R, rad = (P.twa[i]-90)*Math.PI/180;
+      const x = cx+r*Math.cos(rad), y = cy+r*Math.sin(rad);
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    for(let i=P.twa.length-1;i>=0;i--){
+      const v = P.speeds[i][ti]||0, r = (v/maxSp)*R, rad = (-P.twa[i]-90)*Math.PI/180;
+      ctx.lineTo(cx+r*Math.cos(rad), cy+r*Math.sin(rad));
+    }
+    ctx.closePath(); ctx.stroke();
+  });
+  ctx.strokeStyle = "#c92a2a"; ctx.lineWidth = 1; ctx.setLineDash([4,4]);
+  [P.beatAngle, -P.beatAngle].forEach(a => {
+    const rad = (a-90)*Math.PI/180;
+    ctx.beginPath(); ctx.moveTo(cx,cy);
+    ctx.lineTo(cx+R*Math.cos(rad), cy+R*Math.sin(rad)); ctx.stroke();
+  });
+  ctx.setLineDash([]);
+  ctx.fillStyle = "#333"; ctx.font = "10px sans-serif";
+  ctx.fillText("TWS kn:", 10, H-10);
+  ORC_TWS_KN.forEach((v,i) => {
+    ctx.fillStyle = colors[i%colors.length];
+    ctx.fillRect(50+i*38, H-20, 10, 10);
+    ctx.fillStyle = "#333";
+    ctx.fillText(v, 64+i*38, H-11);
+  });
+  ctx.fillStyle = "#0b3d66"; ctx.font = "bold 11px sans-serif";
+  const dispName = P.name.length > 50 ? P.name.slice(0,50)+"..." : P.name;
+  ctx.fillText(dispName, 10, 15);
+  document.getElementById('polarInfo').textContent =
+    "Slagvinkel: "+P.beatAngle+" Jibevinkel: "+P.gybeAngle;
+}
+
+function splitSegment(la1, lo1, la2, lo2, maxNM){
+  const totalNM = haversineNM(la1, lo1, la2, lo2);
+  if(totalNM <= maxNM) return [[la1, lo1], [la2, lo2]];
+  const numSegments = Math.ceil(totalNM / maxNM);
+  const points = [];
+  for(let k = 0; k <= numSegments; k++){
+    const t = k / numSegments;
+    points.push([la1 + (la2-la1)*t, lo1 + (lo2-lo1)*t]);
+  }
+  return points;
+}
+
+const tileWarn = document.getElementById('tileWarn');
+let tileErrorCount = 0;
+function onTileError(){ tileErrorCount++; if(tileErrorCount > 3) tileWarn.style.display = 'block'; }
+
+const kvSjokart = L.tileLayer('https://cache.kartverket.no/v1/wmts/1.0.0/sjokartraster/default/webmercator/{z}/{y}/{x}.png',{attribution:'Kartverket',maxZoom:18});
+const kvTopo = L.tileLayer('https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/webmercator/{z}/{y}/{x}.png',{attribution:'Kartverket',maxZoom:18});
+const esriOcean = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}',{attribution:'Esri',maxZoom:13});
+const esriSat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'Esri',maxZoom:19});
+const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'OSM',maxZoom:19});
+const carto = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{attribution:'CartoDB',maxZoom:19,subdomains:'abcd'});
+const openseamap = L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png',{attribution:'OpenSeaMap',maxZoom:18});
+[kvSjokart,kvTopo,esriOcean,esriSat,osm,carto].forEach(l => l.on('tileerror', onTileError));
+
+const map = L.map('map', {center: [63.43, 10.39], zoom: 8, layers: [kvSjokart, openseamap]});
+L.control.layers({
+  "Kartverket Sjokart": kvSjokart, "Kartverket Topo": kvTopo,
+  "Esri Ocean": esriOcean, "Esri Satellitt": esriSat,
+  "OpenStreetMap": osm, "CartoDB": carto
+}, { "OpenSeaMap (sjomerker)": openseamap }, {position:'topright', collapsed:false}).addTo(map);
+
+map.on('click', e => addWaypoint(e.latlng.lat, e.latlng.lng));
+
+function addWaypoint(lat, lng){
+  const idx = waypoints.length+1;
+  const m = L.marker([lat,lng], {draggable:true}).addTo(map)
+    .bindTooltip("WP"+idx, {permanent:true, direction:'top'});
+  m.on('dragend', calculateRoute);
+  waypoints.push({marker:m});
+  if(waypoints.length === 1) fetchTide(lat, lng);
+  calculateRoute();
+}
+function clearRoute(){
+  waypoints.forEach(w => map.removeLayer(w.marker));
+  waypoints = [];
+  if(routeLine){ 
+    // routeLine kan nå være enten Polyline eller LayerGroup
+    if(routeLine.eachLayer){
+      routeLine.eachLayer(l => map.removeLayer(l));
+    }
+    map.removeLayer(routeLine); 
+    routeLine = null; 
+  }
+  vmgLines.forEach(l => map.removeLayer(l)); vmgLines = [];
+  setHtml('segments', "Klikk i kartet for waypoints.");
+  ["totalNM","totalTime","totalTimeNoCurrent","currentDiff","avgWind","avgSpeed"].forEach(id =>
+    setEl(id, id === "totalNM" ? "0.00" : "-"));
+  setEl('etaInfo', "");
+  setEl('currentEffect', "Klikk Beregn for strom-effekt");
+}
+function removeLast(){
+  const w = waypoints.pop();
+  if(w) map.removeLayer(w.marker);
+  calculateRoute();
+}
+
+function haversineNM(la1,lo1,la2,lo2){
+  const R = 3440.065, toRad = d => d*Math.PI/180;
+  const dLa = toRad(la2-la1), dLo = toRad(lo2-lo1);
+  const a = Math.sin(dLa/2)**2+Math.cos(toRad(la1))*Math.cos(toRad(la2))*Math.sin(dLo/2)**2;
+  return 2*R*Math.asin(Math.sqrt(a));
+}
+function bearing(la1,lo1,la2,lo2){
+  const r = d => d*Math.PI/180, g = x => x*180/Math.PI;
+  const f1 = r(la1), f2 = r(la2), dl = r(lo2-lo1);
+  const y = Math.sin(dl)*Math.cos(f2);
+  const x = Math.cos(f1)*Math.sin(f2)-Math.sin(f1)*Math.cos(f2)*Math.cos(dl);
+  return (g(Math.atan2(y,x))+360)%360;
+}
+function fmtISO(d){
+  const pad = n => String(n).padStart(2,'0');
+  return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+"T"+pad(d.getHours())+":00";
+}
+
+async function getWindAt(lat,lon,dateObj){
+  const key = cacheKey(lat,lon,dateObj);
+  if(windCache.has(key)) return windCache.get(key);
+  await rateLimit();
+  try {
+    const start = fmtISO(new Date(dateObj.getTime()-3600000));
+    const end = fmtISO(new Date(dateObj.getTime()+3600000));
+    const url = 'https://api.open-meteo.com/v1/forecast?latitude='+lat.toFixed(3)+
+      '&longitude='+lon.toFixed(3)+
+      '&hourly=wind_speed_10m,wind_direction_10m&wind_speed_unit=ms'+
+      '&start_hour='+start+'&end_hour='+end;
+    const r = await fetch(url);
+    if(r.status === 429){ windCache.set(key, lastKnownWind); return lastKnownWind; }
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const j = await r.json();
+    let result = lastKnownWind;
+    if(j.hourly && j.hourly.time && j.hourly.time.length){
+      const target = dateObj.getTime();
+      let bestIdx = 0, bestDiff = Infinity;
+      j.hourly.time.forEach((t,i) => {
+        const diff = Math.abs(new Date(t).getTime()-target);
+        if(diff < bestDiff){ bestDiff = diff; bestIdx = i; }
+      });
+      result = {speed: j.hourly.wind_speed_10m[bestIdx], dir: j.hourly.wind_direction_10m[bestIdx]};
+    }
+    windCache.set(key, result);
+    lastKnownWind = result;
+    return result;
+  } catch(e){
+    windCache.set(key, lastKnownWind);
+    return lastKnownWind;
+  }
+}
+
+async function getCurrentAt(lat,lon,dateObj){
+  const key = cacheKey(lat,lon,dateObj);
+  if(currentCache.has(key)) return currentCache.get(key);
+  await rateLimit();
+  try {
+    const start = fmtISO(new Date(dateObj.getTime()-3600000));
+    const end = fmtISO(new Date(dateObj.getTime()+3600000));
+    const url = 'https://marine-api.open-meteo.com/v1/marine?latitude='+lat.toFixed(3)+
+      '&longitude='+lon.toFixed(3)+
+      '&hourly=ocean_current_velocity,ocean_current_direction'+
+      '&start_hour='+start+'&end_hour='+end;
+    const r = await fetch(url);
+    if(r.status === 429 || !r.ok){ currentCache.set(key, {speed:0,dir:0}); return {speed:0,dir:0}; }
+    const j = await r.json();
+    let result = {speed:0, dir:0};
+    if(j.hourly && j.hourly.time && j.hourly.time.length){
+      const target = dateObj.getTime();
+      let bestIdx = 0, bestDiff = Infinity;
+      j.hourly.time.forEach((t,i) => {
+        const diff = Math.abs(new Date(t).getTime()-target);
+        if(diff < bestDiff){ bestDiff = diff; bestIdx = i; }
+      });
+      result = {
+        speed: (j.hourly.ocean_current_velocity[bestIdx]||0)*0.539957,
+        dir: j.hourly.ocean_current_direction[bestIdx]||0
+      };
+    }
+    currentCache.set(key, result);
+    return result;
+  } catch(e){
+    currentCache.set(key, {speed:0,dir:0});
+    return {speed:0, dir:0};
+  }
+}
+
+const wavesCache = new Map();
+
+async function getWavesAt(lat, lon, dateObj){
+  const key = cacheKey(lat, lon, dateObj);
+  if(wavesCache.has(key)) return wavesCache.get(key);
+  await rateLimit();
+  try {
+    const start = fmtISO(new Date(dateObj.getTime()-3600000));
+    const end = fmtISO(new Date(dateObj.getTime()+3600000));
+    const url = 'https://marine-api.open-meteo.com/v1/marine?latitude='+lat.toFixed(3)+
+      '&longitude='+lon.toFixed(3)+
+      '&hourly=wave_height,wave_direction,wave_period'+
+      '&start_hour='+start+'&end_hour='+end;
+    const r = await fetch(url);
+    if(r.status === 429 || !r.ok){
+      wavesCache.set(key, {height:0, dir:0, period:0});
+      return {height:0, dir:0, period:0};
+    }
+    const j = await r.json();
+    let result = {height:0, dir:0, period:0};
+    if(j.hourly && j.hourly.time && j.hourly.time.length){
+      const target = dateObj.getTime();
+      let bestIdx = 0, bestDiff = Infinity;
+      j.hourly.time.forEach((t,i) => {
+        const diff = Math.abs(new Date(t).getTime()-target);
+        if(diff < bestDiff){ bestDiff = diff; bestIdx = i; }
+      });
+      result = {
+        height: j.hourly.wave_height[bestIdx] || 0,
+        dir: j.hourly.wave_direction[bestIdx] || 0,
+        period: j.hourly.wave_period[bestIdx] || 0
+      };
+    }
+    wavesCache.set(key, result);
+    return result;
+  } catch(e){
+    wavesCache.set(key, {height:0, dir:0, period:0});
+    return {height:0, dir:0, period:0};
+  }
+}
+
+//Sjekker om man er på land over havnivå
+async function isLand(lat, lon){
+  const key = Math.round(lat*1000)/1000 + "," + Math.round(lon*1000)/1000;
+  if(landCache.has(key)) return landCache.get(key);
+  
+  // STRATEGI 1: Bruk Kartverkets sjøkart-piksler (mest nøyaktig for Norge)
+  try {
+    const result = await isLandKartverket(lat, lon);
+    if(result !== null){
+      landCache.set(key, result);
+      return result;
+    }
+  } catch(e){}
+  
+  // STRATEGI 2 (fallback): Open-Meteo elevation
+  await new Promise(r => setTimeout(r, 100));
+  try {
+    const url = 'https://api.open-meteo.com/v1/elevation?latitude='+lat.toFixed(3)+'&longitude='+lon.toFixed(3);
+    const r = await fetch(url);
+    if(!r.ok){ landCache.set(key, false); return false; }
+    const j = await r.json();
+    const elev = (j.elevation && j.elevation[0]) || 0;
+    const land = elev > 5.0;
+    landCache.set(key, land);
+    return land;
+  } catch(e){ 
+    landCache.set(key, false);
+    return false; 
+  }
+}
+
+// Klassifiser en piksel-farge fra Kartverkets sjøkart
+function classifyKartverketPixel(r, g, b){
+  // 🟡 LAND (gul/beige)
+  // Eksempel: RGB(255, 250, 191) - alle høye, B lavere
+  if(r > 230 && g > 220 && b < 220 && (r - b) > 30) {
+    return 'land';
+  }
+  
+  // 🌫 TIDEVANN/STRAND (grønn) - dine tester viste RGB(179, 217, 77)
+  // Karakteristisk: G veldig høy, R medium, B lav
+  if(g > 200 && g > r + 20 && g > b + 100) {
+    return 'tidal';
+  }
+  
+  // 🟦 GRUNT VANN (lys cyan) - dine tester viste RGB(224, 255, 255)
+  // Karakteristisk: G og B veldig høye, R litt lavere, alle over 200
+  if(b > 230 && g > 230 && r < g - 20 && r > 200) {
+    return 'shallow';
+  }
+  
+  // ⚪ DYP SJØ (hvit) - RGB(254, 254, 254)
+  if(r > 240 && g > 240 && b > 240 && Math.abs(r - b) < 15) {
+    return 'sea_deep';
+  }
+  
+  // ⚫ KONTUR/TEKST (mørk)
+  if(r < 100 && g < 100 && b < 100) {
+    return 'text';
+  }
+  
+  // 🔵 MIDDELS DYPT (lyseblå med litt mer farge)
+  if(b > 200 && b > r && (b - r) > 20) {
+    return 'medium_sea';
+  }
+  
+  return 'unknown';
+}
+
+// Sjekk Kartverket-pikselfarge - returnerer true hvis "skal unngås" (land/grunt)
+async function isLandKartverket(lat, lon){
+  return new Promise((resolve) => {
+    const zoom = 14;
+    const n = Math.pow(2, zoom);
+    const xtile = Math.floor((lon + 180) / 360 * n);
+    const ytile = Math.floor((1 - Math.log(Math.tan(lat * Math.PI/180) + 1/Math.cos(lat * Math.PI/180))/Math.PI) / 2 * n);
+    const pixelX = Math.floor(((lon + 180) / 360 * n - xtile) * 256);
+    const pixelY = Math.floor(((1 - Math.log(Math.tan(lat * Math.PI/180) + 1/Math.cos(lat * Math.PI/180))/Math.PI) / 2 * n - ytile) * 256);
+    
+    const url = 'https://cache.kartverket.no/v1/wmts/1.0.0/sjokartraster/default/webmercator/'+zoom+'/'+ytile+'/'+xtile+'.png';
+    const img = new Image();
+    img.crossOrigin = "Anonymous";
+    
+    const timeout = setTimeout(() => resolve(null), 3000);
+    
+    img.onload = () => {
+      clearTimeout(timeout);
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 256;
+        canvas.height = 256;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        
+        // Sjekk 5 punkter rundt klikket for å unngå konturer/tekst
+        const checkOffsets = [[0,0], [-2,0], [2,0], [0,-2], [0,2]];
+        
+        // Tell klassifikasjoner
+        const counts = {
+          land: 0,
+          tidal: 0,
+          shallow: 0,
+          sea_deep: 0,
+          medium_sea: 0,
+          text: 0,
+          unknown: 0
+        };
+        
+        for(const [dx, dy] of checkOffsets){
+          const px = pixelX + dx;
+          const py = pixelY + dy;
+          if(px < 0 || px >= 256 || py < 0 || py >= 256) continue;
+          
+          const d = ctx.getImageData(px, py, 1, 1).data;
+          const klass = classifyKartverketPixel(d[0], d[1], d[2]);
+          counts[klass]++;
+        }
+        
+        // BESLUTNING: "Unngås" inkluderer alle ikke-seilbare områder
+        // Land, tidevannsone og grunt vann skal unngås av seilbåt
+        const avoidCount = counts.land + counts.tidal + counts.shallow;
+        const safeCount = counts.sea_deep + counts.medium_sea;
+        
+        // Hvis flertallet av punktene er "unngås" (eller alle er ukjente), avvis
+        // Vi ignorerer 'text' siden konturer er rundt land/grunne
+        const shouldAvoid = avoidCount >= 2 || (avoidCount > safeCount && counts.unknown < 4);
+        
+        resolve(shouldAvoid);
+      } catch(e){
+        resolve(null);
+      }
+    };
+    img.onerror = () => {
+      clearTimeout(timeout);
+      resolve(null);
+    };
+    img.src = url;
+  });
+}
+
+
+
+/*
+async function isLand(lat, lon){
+  const key = Math.round(lat*100)/100 + "," + Math.round(lon*100)/100;
+  if(landCache.has(key)) return landCache.get(key);
+  await new Promise(r => setTimeout(r, 100));
+  
+  // STRATEGI 1: Sjekk Kartverkets sjøkart-fliser direkte
+  // For en gitt lat/lon, beregn hvilken sjøkart-flis den havner i
+  // og sjekk pikselfarge på det punktet
+  try {
+    // Konverter lat/lon til Web Mercator-tile (zoom 16 = god oppløsning)
+    const zoom = 16;
+    const tileSize = 256;
+    const n = Math.pow(2, zoom);
+    const xtile = Math.floor((lon + 180) / 360 * n);
+    const ytile = Math.floor((1 - Math.log(Math.tan(lat * Math.PI/180) + 1/Math.cos(lat * Math.PI/180))/Math.PI) / 2 * n);
+    
+    // Pikselposisjon innenfor flisen
+    const pixelX = Math.floor(((lon + 180) / 360 * n - xtile) * tileSize);
+    const pixelY = Math.floor(((1 - Math.log(Math.tan(lat * Math.PI/180) + 1/Math.cos(lat * Math.PI/180))/Math.PI) / 2 * n - ytile) * tileSize);
+    
+    // Hent flisen fra Kartverket
+    const tileUrl = 'https://cache.kartverket.no/v1/wmts/1.0.0/sjokartraster/default/webmercator/'+zoom+'/'+ytile+'/'+xtile+'.png';
+    const img = new Image();
+    img.crossOrigin = "Anonymous";
+    
+    const result = await new Promise((resolve) => {
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = tileSize;
+          canvas.height = tileSize;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          const px = ctx.getImageData(pixelX, pixelY, 1, 1).data;
+          // Kartverkets sjøkart har KLAR fargekoding:
+          // Land (gul/oransje): R>200, G>180, B<200
+          // Sjø (lyseblå/cyan): R<200, G>200, B>200
+          // Veldig grunn sjø (mørkere blå): R<150, G>180, B>200
+          const isLandColor = px[0] > 200 && px[1] > 170 && px[2] < 220 && px[0] > px[2];
+          resolve(isLandColor);
+        } catch(e){
+          // CORS-feil ved canvas-lesing
+          resolve(null);
+        }
+      };
+      img.onerror = () => resolve(null);
+      img.src = tileUrl;
+      setTimeout(() => resolve(null), 3000);  // 3 sek timeout
+    });
+    
+    if(result !== null){
+      landCache.set(key, result);
+      return result;
+    }
+  } catch(e){
+    console.warn("Kartverket-sjekk feilet:", e.message);
+  }
+  
+  // STRATEGI 2 (fallback): Open-Meteo elevation
+  try {
+    const url = 'https://api.open-meteo.com/v1/elevation?latitude='+lat.toFixed(3)+'&longitude='+lon.toFixed(3);
+    const r = await fetch(url);
+    if(!r.ok){ landCache.set(key, false); return false; }
+    const j = await r.json();
+    const elev = (j.elevation && j.elevation[0]) || 0;
+    const land = elev > 5.0;
+    landCache.set(key, land);
+    return land;
+  } catch(e){ 
+    landCache.set(key, false);
+    return false; 
+  }
+}
+
+*/
+const depthCache = new Map();
+
+//Sjekker om man er på grunne under havnivå
+async function getDepthAt(lat, lon){
+  const key = Math.round(lat*100)/100 + "," + Math.round(lon*100)/100;
+  if(depthCache.has(key)) return depthCache.get(key);
+  await new Promise(r => setTimeout(r, 100));
+  
+  try {
+    // Open-Meteo Marine API har 'sea_floor_depth' (positiv = dybde under havoverflaten)
+    const url = 'https://marine-api.open-meteo.com/v1/marine?latitude='+lat.toFixed(3)+
+      '&longitude='+lon.toFixed(3)+'&current=sea_level_height_msl';
+    const r = await fetch(url);
+    if(!r.ok){ depthCache.set(key, null); return null; }
+    const j = await r.json();
+    // Open-Meteo Marine returnerer ikke alltid dybde direkte
+    // Vi bruker Open-Elevation eller GEBCO som fallback
+    
+    // Alternativ: GEBCO bathymetry via open-elevation-stil API
+    // For Norge: bruk Kartverkets WMS hvis tilgjengelig
+    depthCache.set(key, null);
+    return null;
+  } catch(e){ 
+    depthCache.set(key, null);
+    return null; 
+  }
+}
+
+async function checkWaypointsOnLand(){
+  const warnings = [];
+  for(let i=0;i<waypoints.length;i++){
+    const ll = waypoints[i].marker.getLatLng();
+    const onLand = await isLand(ll.lat, ll.lng);
+    if(onLand) warnings.push(i+1);
+  }
+  return warnings;
+}
+
+async function fetchTide(lat,lon){
+  const box = document.getElementById('tideBox');
+  box.innerHTML = "Henter tidevann fra Kartverket...";
+  try {
+    const depInput = document.getElementById('departureTime').value;
+    const start = depInput ? new Date(depInput) : new Date();
+    const end = new Date(start.getTime()+24*3600*1000);
+    const fmt = d => {
+      const pad = n => String(n).padStart(2,'0');
+      return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+"T"+pad(d.getHours())+":"+pad(d.getMinutes());
+    };
+    const urls = [
+      'https://api.sehavniva.no/tideapi.php?lat='+lat.toFixed(4)+'&lon='+lon.toFixed(4)+'&fromtime='+fmt(start)+'&totime='+fmt(end)+'&datatype=tab&refcode=cd&place=&file=&lang=nb&interval=60&dst=0&tzone=&tide_request=locationdata',
+      'https://api.sehavniva.no/tideapi.php?lat='+lat.toFixed(4)+'&lon='+lon.toFixed(4)+'&fromtime='+fmt(start)+'&totime='+fmt(end)+'&datatype=PRE&refcode=CD&lang=nb&interval=60&tide_request=locationdata'
+    ];
+    let txt = null;
+    for(const url of urls){
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        const r = await fetch(url, {signal: controller.signal});
+        clearTimeout(timeoutId);
+        if(r.ok){
+          txt = await r.text();
+          if(txt && txt.includes("waterlevel")) break;
+        }
+      } catch(e){}
+    }
+    if(!txt){ box.innerHTML = "<i>Tidevann ikke tilgjengelig (API svarte ikke).</i>"; return; }
+    const xml = new DOMParser().parseFromString(txt, "text/xml");
+    const wl = xml.getElementsByTagName("waterlevel");
+    if(!wl.length){ box.innerHTML = "<i>Ingen tidevannsdata her.</i>"; return; }
+    const data = [];
+    for(let i=0;i<wl.length;i++){
+      data.push({
+        time: wl[i].getAttribute("time"),
+        value: parseFloat(wl[i].getAttribute("value")),
+        flag: wl[i].getAttribute("flag")
+      });
+    }
+    let html = "<b>Vannstand (cm fra sjokartnull):</b><br>";
+    data.slice(0, 24).forEach(d => {
+      const t = d.time.slice(5,16).replace('T',' ');
+      const flag = d.flag === "high" ? " <b style='color:#0b3d66'>HW</b>" : 
+                   d.flag === "low" ? " <b style='color:#c92a2a'>LW</b>" : "";
+      html += t+" -> "+d.value.toFixed(0)+" cm"+flag+"<br>";
+    });
+    box.innerHTML = html;
+  } catch(e){ box.innerHTML = "<i>Tidevann feilet: "+e.message+"</i>"; }
+}
+
+function fmtT(h){
+  if(!h || !isFinite(h)) return "--:--";
+  const t = Math.round(Math.abs(h)*3600), hh = Math.floor(t/3600), mm = Math.floor((t%3600)/60);
+  return String(hh).padStart(2,'0')+":"+String(mm).padStart(2,'0');
+}
+
+
+function evaluateJibeAdvantage(twaDirect, twsMs, motorSpd, minSailSpd, segmentDistanceNM, segmentCourse, windDir){
+  const P = currentPolar;
+  
+  // STREK GRENSER: Jibe-tips KUN ved dyp lens, slag-tips KUN ved kryss
+// Mellom disse (halvvind/rom skjøts) er det INGEN VMG-gevinst
+const isDownwind = twaDirect > 150;   // klar lens
+const isUpwind = twaDirect < 40;       // klart kryss
+if(!isDownwind && !isUpwind) return null;
+  
+  // Direkte fart langs ønsket retning
+  const directRes = vmgRouting(twaDirect, twsMs, motorSpd, minSailSpd);
+  if(directRes.switched) return null;
+  const directSpeed = directRes.speed;
+  if(directSpeed <= 0.1) return null;
+  const directTimeHours = segmentDistanceNM / directSpeed;
+  
+  // Test ulike TWA-vinkler for taktisk seiling
+  let bestTactical = null;
+  const testRange = isDownwind ? 
+  {from: 140, to: 165, label: 'jibe'} :   // bare dyp lens-vinkler
+  {from: 35, to: 50, label: 'slag'};       // bare kryss-vinkler
+  
+  for(let testTWA = testRange.from; testTWA <= testRange.to; testTWA += 5){
+    const testRes = vmgRouting(testTWA, twsMs, motorSpd, minSailSpd);
+    if(testRes.switched) continue;
+    const testSpeed = testRes.speed;
+    if(testSpeed <= 0.1) continue;
+    
+    const angleOff = Math.abs(testTWA - twaDirect);
+    const distanceFactor = 1 / Math.cos(angleOff * Math.PI/180);
+    const taktiskDistance = segmentDistanceNM * distanceFactor;
+    const taktiskTime = taktiskDistance / testSpeed;
+    
+    if(taktiskTime < directTimeHours){
+      const gainPct = ((directTimeHours - taktiskTime) / directTimeHours * 100);
+      if(!bestTactical || gainPct > bestTactical.gainPct){
+        bestTactical = {
+          type: testRange.label,
+          bestTWA: testTWA,
+          angleOff: angleOff,
+          gainPct: gainPct,
+          extraDistancePct: (distanceFactor - 1) * 100,
+          directSpeed: directSpeed,
+          optimalSpeed: testSpeed,
+          directTimeMin: directTimeHours * 60,
+          taktiskTimeMin: taktiskTime * 60,
+          savedMin: (directTimeHours - taktiskTime) * 60
+        };
+      }
+    }
+  }
+  
+  // Bare returner hvis fordelen er ≥ 5%
+  if(!bestTactical || bestTactical.gainPct < 10) return null;
+  
+  return {
+    type: bestTactical.type,
+    bestTWA: bestTactical.bestTWA,
+    angleOff: bestTactical.angleOff.toFixed(0),
+    gainPct: bestTactical.gainPct.toFixed(0),
+    extraDistancePct: bestTactical.extraDistancePct.toFixed(0),
+    directSpeed: bestTactical.directSpeed.toFixed(2),
+    optimalSpeed: bestTactical.optimalSpeed.toFixed(2),
+    savedMin: bestTactical.savedMin.toFixed(0)
+  };
+}
+
+// Sjekk om en LINJE mellom to punkter krysser land, og dybde under vann
+// Sampler flere punkter langs linja for sjekk
+// STRENG: Sjekker direkte linja PLUSS 300m sikkerhetsmargin
+// Brukes for slag/jibe-baner som ikke skal nær land
+async function lineCrossesLandStrict(la1, lo1, la2, lo2){
+  const distNM = haversineNM(la1, lo1, la2, lo2);
+  const numSamples = Math.max(5, Math.ceil(distNM / 0.5));
+  
+  const courseRad = bearing(la1, lo1, la2, lo2) * Math.PI / 180;
+  const perpRad = courseRad + Math.PI/2;
+  const safetyMarginNM = 0.3;
+  const marginDeg = safetyMarginNM / 60;
+  
+  for(let s = 1; s < numSamples; s++){
+    const t = s / numSamples;
+    const cLa = la1 + (la2 - la1) * t;
+    const cLo = lo1 + (lo2 - lo1) * t;
+    
+    if(await isLand(cLa, cLo)) return true;
+    
+    // 300m sidesjekk for slag/jibe
+    const sideLaR = cLa + marginDeg * Math.cos(perpRad);
+    const sideLoR = cLo + marginDeg * Math.sin(perpRad) / Math.cos(cLa * Math.PI/180);
+    if(await isLand(sideLaR, sideLoR)) return true;
+    
+    const sideLaL = cLa - marginDeg * Math.cos(perpRad);
+    const sideLoL = cLo - marginDeg * Math.sin(perpRad) / Math.cos(cLa * Math.PI/180);
+    if(await isLand(sideLaL, sideLoL)) return true;
+  }
+  return false;
+}
+
+// MILD: Sjekker KUN selve linja, ingen sidesjekk
+// Brukes for hovedruta mellom waypoints (du har siste ord)
+async function lineCrossesLand(la1, lo1, la2, lo2){
+  const distNM = haversineNM(la1, lo1, la2, lo2);
+  const numSamples = Math.max(5, Math.ceil(distNM / 0.3));  // Finere sampling siden vi ikke sjekker sidene
+  
+  for(let s = 1; s < numSamples; s++){
+    const t = s / numSamples;
+    const cLa = la1 + (la2 - la1) * t;
+    const cLo = lo1 + (lo2 - lo1) * t;
+    
+    if(await isLand(cLa, cLo)) return true;
+  }
+  return false;
+}
+
+
+async function calculateZigzagPath(startLa, startLo, endLa, endLo, angleOff, segCourse){
+  const segDistNM = haversineNM(startLa, startLo, endLa, endLo);
+  
+  async function tryPattern(numLegs, startWithFirstAngle){
+    const points = [[startLa, startLo]];
+    const legLength = segDistNM / (numLegs * Math.cos(angleOff * Math.PI/180));
+    const legLenDeg = legLength / 60;
+    
+    let currentLa = startLa, currentLo = startLo;
+    let useFirstAngle = startWithFirstAngle;
+    
+    for(let i = 0; i < numLegs; i++){
+      const benCourse = useFirstAngle ? 
+        (segCourse + angleOff + 360) % 360 :
+        (segCourse - angleOff + 360) % 360;
+      
+      const rad = benCourse * Math.PI / 180;
+      const dLa = legLenDeg * Math.cos(rad);
+      const dLo = legLenDeg * Math.sin(rad) / Math.cos(currentLa * Math.PI / 180);
+      const nextLa = currentLa + dLa;
+      const nextLo = currentLo + dLo;
+      
+      if(i < numLegs - 1){
+        const onLand = await isLand(nextLa, nextLo);
+        if(onLand) return null;
+      }
+      
+      const crosses = await lineCrossesLandStrict(currentLa, currentLo, nextLa, nextLo);
+      if(crosses) return null;
+      
+      points.push([nextLa, nextLo]);
+      currentLa = nextLa;
+      currentLo = nextLo;
+      useFirstAngle = !useFirstAngle;
+    }
+    
+    points[points.length - 1] = [endLa, endLo];
+    return points;
+  }
+  
+  // TEST OPPTIL 30 BEN! Korte ben kan unngå komplekse farvann
+  // Strategi: bruk en eksponentiell tabell - prøv flere ben jo mer kompleks ruten er
+  const legCounts = [2, 3, 4, 6, 8, 10, 12, 15, 18, 22, 26, 30];
+  
+  for(const numLegs of legCounts){
+    // Beregn benlengde for å gi brukeren visuell tilbakemelding
+    const legLenNM = segDistNM / (numLegs * Math.cos(angleOff * Math.PI/180));
+    
+    // Prøv styrbord-først
+    let result = await tryPattern(numLegs, true);
+    if(result){
+      console.log("Sik-sak OK med "+numLegs+" ben (styrbord-først, "+legLenNM.toFixed(2)+" NM per ben)");
+      return { legs: numLegs, points: result, side: 'styrbord', legLenNM: legLenNM };
+    }
+    
+    // Prøv babord-først
+    result = await tryPattern(numLegs, false);
+    if(result){
+      console.log("Sik-sak OK med "+numLegs+" ben (babord-først, "+legLenNM.toFixed(2)+" NM per ben)");
+      return { legs: numLegs, points: result, side: 'babord', legLenNM: legLenNM };
+    }
+  }
+  
+  console.log("Ingen sik-sak-løsning funnet selv med 30 ben");
+  return null;
+}
+
+
+
+async function calculateRoute(){
+  if(calculatingRoute){
+    console.log("calculateRoute allerede aktiv - hopper over");
+    return;
+  }
+  calculatingRoute = true;
+  try {
+    if(routeLine){ map.removeLayer(routeLine); routeLine = null; }
+  vmgLines.forEach(l => map.removeLayer(l)); vmgLines = [];
+  const seg = document.getElementById('segments');
+  seg.innerHTML = "";
+  if(waypoints.length < 2){ seg.textContent = "Trenger minst 2 waypoints."; return; }
+
+  const landWarnings = await checkWaypointsOnLand();
+const segmentWarnings = [];
+
+// Sjekk hvert hovedsegment for landkryssing
+for(let r = 0; r < waypoints.length - 1; r++){
+  const w1 = waypoints[r].marker.getLatLng();
+  const w2 = waypoints[r+1].marker.getLatLng();
+  if(await lineCrossesLand(w1.lat, w1.lng, w2.lat, w2.lng)){
+    segmentWarnings.push("WP"+(r+1)+"→WP"+(r+2));
+  }
+}
+
+if(landWarnings.length || segmentWarnings.length){
+  let warnHtml = '<div style="background:#ffe3e3;color:#c92a2a;padding:6px;border-radius:4px;margin-bottom:6px;">';
+  if(landWarnings.length){
+    warnHtml += '<b>⚠ ADVARSEL:</b> Waypoint(s) '+landWarnings.join(', ')+' ligger på land/grunne!<br>';
+  }
+  if(segmentWarnings.length){
+    warnHtml += '<b>⚠ ADVARSEL:</b> Linje '+segmentWarnings.join(', ')+' krysser land/grunne!<br>';
+    warnHtml += '<small>Legg til mellom-waypoints for å unngå dette.</small>';
+  }
+  warnHtml += '</div>';
+  seg.innerHTML = warnHtml;
+}
+
+  const pts = waypoints.map(w => [w.marker.getLatLng().lat, w.marker.getLatLng().lng]);
+
+// Sjekk hvert hovedsegment for landkryssing og fargekod deretter
+const routeSegments = [];
+for(let r = 0; r < pts.length - 1; r++){
+  const crossesLand = await lineCrossesLand(pts[r][0], pts[r][1], pts[r+1][0], pts[r+1][1]);
+  const segColor = crossesLand ? '#c92a2a' : '#2b8a3e';  // rød = land, grønn = OK
+  const segWeight = crossesLand ? 4 : 3;
+  
+  const seg = L.polyline([pts[r], pts[r+1]], {
+    color: segColor, 
+    weight: segWeight,
+    opacity: 0.8
+  }).addTo(map);
+  
+  if(crossesLand){
+    seg.bindTooltip('⚠ <b>ADVARSEL:</b> Linja WP'+(r+1)+'→WP'+(r+2)+' krysser land/grunne!<br>Legg til mellom-waypoint for å unngå dette.', 
+      {sticky: true, direction: 'top'});
+    console.warn("WP"+(r+1)+"→WP"+(r+2)+" krysser land/grunne!");
+  }
+  
+  routeSegments.push(seg);
+}
+// Hold referanse til alle segmenter slik at clearRoute kan fjerne dem
+routeLine = L.layerGroup(routeSegments).addTo(map);
+  const midLat = pts.reduce((s,p)=>s+p[0],0)/pts.length;
+  const midLon = pts.reduce((s,p)=>s+p[1],0)/pts.length;
+  document.getElementById('windyFrame').src =
+    'https://embed.windy.com/embed2.html?lat='+midLat+'&lon='+midLon+
+    '&zoom=8&level=surface&overlay=wind&menu=&type=map&metricWind=m/s';
+
+  const motorRaw = document.getElementById('motorSpeed').value.trim();
+  const motorSpd = motorRaw === "" ? 0 : parseFloat(motorRaw) || 0;
+  const minSailRaw = document.getElementById('minSailSpeed').value.trim();
+  const minSailSpd = minSailRaw === "" ? 0 : parseFloat(minSailRaw) || 0;
+  const maxSegmentNM = parseFloat(document.getElementById('maxSegmentNM').value) || 2;
+  const sailOnlyMode = motorSpd <= 0;
+  console.log("BEREGN: motor="+motorSpd+"kn, minSeil="+minSailSpd+"kn, maxSeg="+maxSegmentNM+"NM");
+
+  const depInput = document.getElementById('departureTime').value;
+  const departure = depInput ? new Date(depInput) : new Date();
+	// OPTIMALISERING: Prefetch alle vinddata for hele ruten først
+	const prefetchEnd = new Date(departure.getTime() + 48*3600000);
+	await batchPrefetchForRoute(pts, maxSegmentNM, departure, prefetchEnd);
+  let totalNM = 0, totalH = 0, totalHnoCurrent = 0;
+let windSum = 0, spdSum = 0, n = 0;
+let maxWaveTotal = 0; // Maks bølgehøyde på hele ruten
+let currentTime = new Date(departure.getTime());
+
+  for(let i=0;i<pts.length-1;i++){
+    const [la1, lo1] = pts[i], [la2, lo2] = pts[i+1];
+    const subPts = splitSegment(la1, lo1, la2, lo2, maxSegmentNM);
+    console.log("Etappe "+(i+1)+": "+(subPts.length-1)+" delsegmenter");
+
+    let etappeNM = 0, etappeH = 0, etappeHnoCur = 0;
+	let etappeWindSpd = 0, etappeWindDir = 0, etappeWindCount = 0;
+	let etappeMotorNM = 0, etappeSailNM = 0;
+	let etappeMaxWave = 0;
+	let etappeCourseSum = 0, etappeTwaSum = 0;
+	let etappeSailSpeedSum = 0, etappeSubCount = 0;
+	const segStart = new Date(currentTime.getTime());
+
+    for(let j=0;j<subPts.length-1;j++){
+      const [sLa1, sLo1] = subPts[j], [sLa2, sLo2] = subPts[j+1];
+      const subNM = haversineNM(sLa1, sLo1, sLa2, sLo2);
+      const subCourse = bearing(sLa1, sLo1, sLa2, sLo2);
+      const subMLa = (sLa1+sLa2)/2, subMLo = (sLo1+sLo2)/2;
+
+      const [wind, curr, waves] = await Promise.all([
+  getWindAt(subMLa, subMLo, currentTime),
+  getCurrentAt(subMLa, subMLo, currentTime),
+  getWavesAt(subMLa, subMLo, currentTime)
+]);
+
+// Spor maks bølge for etappen og totalt
+if(waves.height > etappeMaxWave) etappeMaxWave = waves.height;
+if(waves.height > maxWaveTotal) maxWaveTotal = waves.height;
+      const twa = Math.abs(((wind.dir-subCourse+540)%360)-180);
+      const vmgRes = vmgRouting(twa, wind.speed||0, motorSpd, minSailSpd);
+      const speed = vmgRes.speed;
+
+      if(vmgRes.switched) etappeMotorNM += subNM;
+      else etappeSailNM += subNM;
+	  etappeCourseSum += subCourse;
+	etappeTwaSum += twa;
+	// Lagre den ACTUAL polar-farten (før motor-bytte)
+	const rawSailSpeed = vmgRes.switched ? 
+	  (vmgRes.mode.includes('VMG-slag') ? polarSpeed(currentPolar.beatAngle, wind.speed||0) * Math.cos((currentPolar.beatAngle - twa) * Math.PI/180) :
+	   vmgRes.mode.includes('VMG-jibe') ? polarSpeed(currentPolar.gybeAngle, wind.speed||0) * Math.cos((twa - currentPolar.gybeAngle) * Math.PI/180) :
+	   polarSpeed(twa, wind.speed||0))
+	  : vmgRes.speed;
+	etappeSailSpeedSum += Math.max(0, rawSailSpeed);
+	etappeSubCount++;
+
+      // Tegn VMG-baner kun for første delsegment i etappen (gjør én tegning per etappe)
+// og kun hvis checkbox er på
+const showVmg = document.getElementById('showVmgPaths').checked;
+
+// Røde slag/jibe-baner er deaktivert - vi viser kun anbefalt grønn Z-bane via jibeAdvice
+/*
+if(j === 0 && showVmg){
+  const beatA = currentPolar.beatAngle;
+  const gybeA = currentPolar.gybeAngle;
+  
+  // Beregn distansen vi vil tegne (ca. halve etappen)
+  const subTotalNM = haversineNM(la1, lo1, la2, lo2);
+  const len = subTotalNM * 0.4 / 60; // 40% av total etappe i grader
+  
+  const drawLine = (ang, color, label) => {
+    const rad = ang*Math.PI/180;
+    const dla = len*Math.cos(rad);
+    const dlo = len*Math.sin(rad)/Math.cos(sLa1*Math.PI/180);
+    const line = L.polyline([[sLa1,sLo1],[sLa1+dla,sLo1+dlo]],
+      {color: color, weight: 2, dashArray:'8,4', opacity: 0.75}).addTo(map);
+    if(label){
+      line.bindTooltip(label, {sticky: true});
+    }
+    vmgLines.push(line);
+  };
+  
+  // KRYSS-baner (rød): hvis båten er i kryss
+  if(vmgRes.vmg && vmgRes.mode.includes('VMG-slag')){
+    // Tegn begge slag fra startpunkt
+    const tackStb = (wind.dir + beatA + 180) % 360;
+    const tackPort = (wind.dir - beatA + 180 + 360) % 360;
+    drawLine(tackStb, '#c92a2a', '⛵ Styrbord slag (TWA '+beatA+'°)');
+    drawLine(tackPort, '#c92a2a', '⛵ Babord slag (TWA '+beatA+'°)');
+  }
+  
+  // LENS-baner (rød): hvis båten er i lens
+  if(vmgRes.vmg && vmgRes.mode.includes('VMG-jibe')){
+    const gybeStb = (wind.dir + gybeA + 180) % 360;
+    const gybePort = (wind.dir - gybeA + 180 + 360) % 360;
+    drawLine(gybeStb, '#c92a2a', '⛵ Styrbord lens (TWA '+gybeA+'°)');
+    drawLine(gybePort, '#c92a2a', '⛵ Babord lens (TWA '+gybeA+'°)');
+  }
+}
+*/
+
+      const cRad = subCourse*Math.PI/180;
+      const bx = speed*Math.sin(cRad), by = speed*Math.cos(cRad);
+      const crRad = (curr.dir||0)*Math.PI/180;
+      const sx = (curr.speed||0)*Math.sin(crRad), sy = (curr.speed||0)*Math.cos(crRad);
+      const sogAlong = (bx+sx)*Math.sin(cRad)+(by+sy)*Math.cos(cRad);
+      const sog = Math.max(0.05, sogAlong);
+      const subHours = subNM/sog;
+      const subHoursNoCur = subNM/Math.max(0.05, speed);
+
+      etappeNM += subNM;
+      etappeH += subHours;
+      etappeHnoCur += subHoursNoCur;
+      if(wind.speed != null){
+        etappeWindSpd += wind.speed;
+        etappeWindDir += wind.dir;
+        etappeWindCount++;
+      }
+      currentTime = new Date(currentTime.getTime()+subHours*3600000);
+    }
+
+    const avgWindSpd = etappeWindCount ? etappeWindSpd/etappeWindCount : 0;
+    const avgWindDir = etappeWindCount ? etappeWindDir/etappeWindCount : 0;
+    const avgWindKn = avgWindSpd * 1.94384;
+    const etappeCurDelta = etappeHnoCur - etappeH;
+	const avgCourse = etappeSubCount ? etappeCourseSum/etappeSubCount : 0;
+	const avgTwa = etappeSubCount ? etappeTwaSum/etappeSubCount : 0;
+	const avgSailSpeed = etappeSubCount ? etappeSailSpeedSum/etappeSubCount : 0;
+	// Sjekk om jibe/slag gir fordel
+	const jibeAdvice = evaluateJibeAdvantage(avgTwa, avgWindSpd, motorSpd, minSailSpd, etappeNM, avgCourse, avgWindDir);
+	// Tegn ANBEFALT jibe/slag-bane (grønn stiplet) hvis checkbox er på
+
+
+// Bare vis sik-sak hvis vinkelen er stor nok til å være visuelt meningsfull
+const minAngleForDisplay = 10;
+if(jibeAdvice && document.getElementById('showVmgPaths').checked && parseFloat(jibeAdvice.angleOff) >= minAngleForDisplay){isLand
+  const startLa = pts[i][0], startLo = pts[i][1];
+  const endLa = pts[i+1][0], endLo = pts[i+1][1];
+  const segCourse = bearing(startLa, startLo, endLa, endLo);
+  const angleOff = parseFloat(jibeAdvice.angleOff);
+  const adviceColor = jibeAdvice.type === 'slag' ? '#c92a2a' : '#2b8a3e';
+  
+  // Beregn sik-sak-bane med automatisk antall ben for å unngå land
+  const zigzag = await calculateZigzagPath(startLa, startLo, endLa, endLo, angleOff, segCourse);
+  
+  if(zigzag){
+    // Tegn hvert ben separat
+    for(let k = 0; k < zigzag.points.length - 1; k++){
+      const [aLa, aLo] = zigzag.points[k];
+      const [bLa, bLo] = zigzag.points[k+1];
+      const benLine = L.polyline([[aLa, aLo], [bLa, bLo]],
+        {color: adviceColor, weight: 2.5, dashArray:'10,5', opacity: 0.85}).addTo(map);
+      benLine.bindTooltip(
+  '🎯 Ben '+(k+1)+'/'+zigzag.legs+' ('+zigzag.legLenNM.toFixed(1)+' NM)<br>'+
+  jibeAdvice.type+' '+zigzag.side+'-først, TWA '+jibeAdvice.bestTWA+'°: '+jibeAdvice.optimalSpeed+' kn<br>'+
+  'Sparer '+jibeAdvice.savedMin+' min totalt',
+  {sticky: true}
+);
+      vmgLines.push(benLine);
+    }
+    
+    // Tegn markører på hvert vendingspunkt (ikke start eller slutt)
+    for(let k = 1; k < zigzag.points.length - 1; k++){
+      const [mLa, mLo] = zigzag.points[k];
+      const marker = L.circleMarker([mLa, mLo], {
+        radius: 5,
+        color: adviceColor,
+        fillColor: '#fff',
+        fillOpacity: 1,
+        weight: 2.5
+      }).bindTooltip('🔄 '+jibeAdvice.type.toUpperCase()+' '+k+'/'+(zigzag.legs-1)+' - sparer '+jibeAdvice.savedMin+' min totalt', {sticky: true}).addTo(map);
+      vmgLines.push(marker);
+    }
+    
+    // Info-tooltip på første ben med totalsummen
+    if(zigzag.points.length > 1){
+      const firstLine = vmgLines[vmgLines.length - (zigzag.points.length - 1) - (zigzag.points.length - 2)];
+      if(firstLine && firstLine.bindTooltip){
+        firstLine.bindTooltip('🎯 Sik-sak: '+zigzag.legs+' ben, '+jibeAdvice.type+' ved TWA '+jibeAdvice.bestTWA+'°, sparer '+jibeAdvice.savedMin+' min', {sticky: true});
+      }
+    }
+  } else {
+    // Selv 6 ben krysser land - vis en advarsel ved første waypoint
+    const warnMarker = L.circleMarker([startLa, startLo], {
+      radius: 8,
+      color: '#fd7e14',
+      fillColor: '#fff',
+      fillOpacity: 1,
+      weight: 2.5
+    }).bindTooltip('⚠ '+jibeAdvice.type.toUpperCase()+' anbefales men landunngåelse mislyktes. Legg til mellom-waypoints manuelt.', {sticky: true}).addTo(map);
+    vmgLines.push(warnMarker);
+  }
+}
+
+
+    totalNM += etappeNM;
+    totalH += etappeH;
+    totalHnoCurrent += etappeHnoCur;
+    if(avgWindSpd > 0){ windSum += avgWindSpd; spdSum += etappeNM/etappeH; n++; }
+
+    const tFmt = d => d.toLocaleString('nb-NO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    const sailPct = etappeNM > 0 ? ((etappeSailNM/etappeNM)*100).toFixed(0) : "0";
+    const motorPct = etappeNM > 0 ? ((etappeMotorNM/etappeNM)*100).toFixed(0) : "0";
+
+    let modeStr;
+    if(etappeMotorNM < 0.01){
+      modeStr = '<b style="color:#2b8a3e">100% seil</b>';
+    } else if(etappeSailNM < 0.01){
+      modeStr = '<b style="color:#c92a2a">100% motor</b>';
+    } else {
+      modeStr = '<b>Blandet: '+sailPct+'% seil ('+etappeSailNM.toFixed(1)+' NM), '+motorPct+'% motor ('+etappeMotorNM.toFixed(1)+' NM)</b>';
+    }
+
+    const currStr = etappeCurDelta > 0.01 ? '(strom hjelper +'+(etappeCurDelta*60).toFixed(0)+' min)' :
+                    etappeCurDelta < -0.01 ? '(strom bremser '+(etappeCurDelta*60).toFixed(0)+' min)' :
+                    'neglisjerbar strom';
+
+    const windStr = '<b style="color:#0b3d66">'+avgWindSpd.toFixed(1)+' m/s ('+avgWindKn.toFixed(1)+' kn) fra '+avgWindDir.toFixed(0)+'</b>';
+
+    // Fargekoding på bølgehøyde
+let waveColor = '#0b3d66'; // blå = OK
+if(etappeMaxWave >= 1.5) waveColor = '#fd7e14'; // oransje = krevende
+if(etappeMaxWave >= 2.5) waveColor = '#c92a2a'; // rød = farlig
+const waveStr = etappeMaxWave > 0.01 ? 
+  '<b style="color:'+waveColor+'">'+etappeMaxWave.toFixed(1)+' m</b>' : 
+  'ingen data';
+
+// Klassifiser TWA i seglerterminologi
+let twaLabel = '';
+if(avgTwa < 35) twaLabel = ' (kryss)';
+else if(avgTwa < 60) twaLabel = ' (bidevind)';
+else if(avgTwa < 100) twaLabel = ' (halvvind)';
+else if(avgTwa < 150) twaLabel = ' (rom skjøts)';
+else twaLabel = ' (lens)';
+
+const sailSpeedColor = avgSailSpeed >= (parseFloat(document.getElementById('minSailSpeed').value)||0) ? '#2b8a3e' : '#c92a2a';
+
+seg.innerHTML += '<div><b>WP'+(i+1)+' -> WP'+(i+2)+'</b> ('+(subPts.length-1)+' delsegmenter)<br>'+
+  tFmt(segStart)+' -> '+tFmt(currentTime)+'<br>'+
+  'Kurs: <b>'+avgCourse.toFixed(0)+'°</b> | Vind snitt: '+windStr+'<br>'+
+  'TWA: <b>'+avgTwa.toFixed(0)+'°</b>'+twaLabel+' | Polar-fart: <b style="color:'+sailSpeedColor+'">'+avgSailSpeed.toFixed(1)+' kn</b><br>'+
+  'Distanse: '+etappeNM.toFixed(2)+' NM | Maks bølge: '+waveStr+ '<br>'+
+  (jibeAdvice ? '<div style="background:#fff3cd;padding:4px;border-radius:3px;margin:4px 0;font-size:11px;">💡 <b>'+jibeAdvice.type+'-tips:</b> Seil i Z-mønster med TWA '+jibeAdvice.bestTWA+'° → <b style="color:#2b8a3e">sparer '+jibeAdvice.savedMin+' min ('+jibeAdvice.gainPct+'% raskere)</b><br>Direkte: '+jibeAdvice.directSpeed+' kn (lange ben). Taktisk: '+jibeAdvice.optimalSpeed+' kn (kort ben '+jibeAdvice.extraDistancePct+'% lengre)</div>' : '')+
+  modeStr+'<br>'+
+  'Tid: '+fmtT(etappeH)+' (uten strom: '+fmtT(etappeHnoCur)+') '+currStr+'</div>';
+  }
+
+  setEl('totalNM', totalNM.toFixed(2));
+  setEl('totalTime', fmtT(totalH));
+  setEl('totalTimeNoCurrent', fmtT(totalHnoCurrent));
+  const diffH = totalHnoCurrent - totalH;
+  setEl('currentDiff', (diffH >= 0 ? "+" : "-") + fmtT(Math.abs(diffH)));
+  setEl('avgWind', n ? (windSum/n).toFixed(1)+" m/s" : "-");
+  setEl('avgSpeed', n ? (spdSum/n).toFixed(1)+" kn" : "-");
+
+// Fargekoding for total maks bølge
+const maxWaveEl = document.getElementById('maxWave');
+if(maxWaveEl){
+  if(maxWaveTotal > 0.01){
+    maxWaveEl.textContent = maxWaveTotal.toFixed(1) + " m";
+    if(maxWaveTotal >= 2.5) maxWaveEl.style.color = '#c92a2a';      // rød
+    else if(maxWaveTotal >= 1.5) maxWaveEl.style.color = '#fd7e14'; // oransje
+    else maxWaveEl.style.color = '#0b3d66';                          // blå
+  } else {
+    maxWaveEl.textContent = "-";
+    maxWaveEl.style.color = '#0b3d66';
+  }
+}
+
+  const ce = document.getElementById('currentEffect');
+  if(ce){
+    const diffMin = diffH * 60;
+    if(Math.abs(diffMin) > 240){
+      ce.innerHTML = "Strom-sammenligning urealistisk (lav seilfart). Sett min seilfart > 0.";
+      ce.className = "current-effect current-neutral";
+    } else if(Math.abs(diffMin) < 2){
+      ce.textContent = "Strommen har minimal effekt (+/- 2 min)";
+      ce.className = "current-effect current-neutral";
+    } else if(diffH > 0){
+      ce.textContent = "MEDSTROMS NETTO: Sparer "+diffMin.toFixed(0)+" min";
+      ce.className = "current-effect current-help";
+    } else {
+      ce.textContent = "MOTSTROMS NETTO: Bruker "+(-diffMin).toFixed(0)+" min ekstra";
+      ce.className = "current-effect current-hurt";
+    }
+  }
+
+  const etaFmt = currentTime.toLocaleString('nb-NO',{weekday:'short',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+  const depFmt = departure.toLocaleString('nb-NO',{weekday:'short',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+  const modeLabel = sailOnlyMode ? 'KUN SEIL (ingen motor)' : 'Motor: '+motorSpd+' kn (min seil '+minSailSpd+' kn)';
+  setHtml('etaInfo', 'Avgang: '+depFmt+' -> ETA: '+etaFmt+'<br>'+modeLabel);
+  } finally {
+    calculatingRoute = false;
+  }
+}
+
+const ISO_COLORS = ['#a5d8ff','#74c0fc','#4dabf7','#339af0','#1c7ed6','#1971c2','#1864ab','#5f3dc4','#7048e8','#9c36b5'];
+
+function convexHull(pts){
+  const points = pts.slice().sort((a,b) => a[0]-b[0]||a[1]-b[1]);
+  const n = points.length;
+  if(n <= 1) return points;
+  const cross = (O,A,B) => (A[0]-O[0])*(B[1]-O[1])-(A[1]-O[1])*(B[0]-O[0]);
+  const lower = [];
+  for(const p of points){
+    while(lower.length >= 2 && cross(lower[lower.length-2], lower[lower.length-1], p) <= 0) lower.pop();
+    lower.push(p);
+  }
+  const upper = [];
+  for(let i=n-1;i>=0;i--){
+    const p = points[i];
+    while(upper.length >= 2 && cross(upper[upper.length-2], upper[upper.length-1], p) <= 0) upper.pop();
+    upper.push(p);
+  }
+  return lower.slice(0,-1).concat(upper.slice(0,-1));
+}
+
+function clearIsochrones(){
+  isochroneLayers.forEach(l => map.removeLayer(l));
+  isochroneLayers = [];
+  setEl('isoStatus', '');
+}
+
+async function drawIsochrones(){
+  if(!waypoints.length){ alert("Sett startpunkt forst."); return; }
+  clearIsochrones();
+  const startLat = waypoints[0].marker.getLatLng().lat;
+  const startLon = waypoints[0].marker.getLatLng().lng;
+  const depInput = document.getElementById('departureTime').value;
+  const departure = depInput ? new Date(depInput) : new Date();
+  const motorRaw = document.getElementById('motorSpeed').value.trim();
+  const motorSpd = motorRaw === "" ? 0 : parseFloat(motorRaw) || 0;
+  const minSailRaw = document.getElementById('minSailSpeed').value.trim();
+  const minSailSpd = minSailRaw === "" ? 0 : parseFloat(minSailRaw) || 0;
+  const maxH = parseFloat(document.getElementById('isoMaxHours').value) || 6;
+  const dt = parseFloat(document.getElementById('isoStep').value) || 1;
+  const steps = Math.ceil(maxH/dt);
+  setEl('isoStatus', "Beregner...");
+  let frontier = [[startLat, startLon]];
+
+  for(let s=1;s<=steps;s++){
+    const elapsedH = s*dt;
+    const targetTime = new Date(departure.getTime()+elapsedH*3600000);
+    const midLat = frontier.reduce((a,p)=>a+p[0],0)/frontier.length;
+    const midLon = frontier.reduce((a,p)=>a+p[1],0)/frontier.length;
+    const wind = await getWindAt(midLat, midLon, targetTime);
+    if(wind.speed == null){ setEl('isoStatus', "Mangler vind h"+elapsedH); break; }
+    const newPoints = [];
+    for(const [lat, lon] of frontier){
+      for(let heading=0;heading<360;heading+=15){
+        const twa = Math.abs(((wind.dir-heading+540)%360)-180);
+        const vmgRes = vmgRouting(twa, wind.speed, motorSpd, minSailSpd);
+        const dist = vmgRes.speed*dt;
+        const rad = heading*Math.PI/180;
+        const dLat = (dist/60)*Math.cos(rad);
+        const dLon = (dist/60)*Math.sin(rad)/Math.cos(lat*Math.PI/180);
+        newPoints.push([lat+dLat, lon+dLon]);
+      }
+    }
+    frontier = convexHull(newPoints);
+    if(frontier.length < 3) break;
+    const color = ISO_COLORS[(s-1)%ISO_COLORS.length];
+    const poly = L.polygon(frontier, {
+      color: color, fillColor: color, weight: 2,
+      opacity: 0.8, fillOpacity: 0.08, dashArray: '5,3'
+    }).bindTooltip(elapsedH+'h (vind '+wind.speed.toFixed(1)+' m/s)', {sticky:true}).addTo(map);
+    isochroneLayers.push(poly);
+    const north = frontier.reduce((m,p) => p[0]>m[0]?p:m, frontier[0]);
+    const label = L.marker(north, {
+      icon: L.divIcon({
+        className: 'iso-label',
+        html: '<div style="background:'+color+';color:white;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:bold;">'+elapsedH+'h</div>',
+        iconSize: [40, 22], iconAnchor: [20, 11]
+      })
+    }).addTo(map);
+    isochroneLayers.push(label);
+    setEl('isoStatus', "Tegner "+s+"/"+steps+"...");
+  }
+  setEl('isoStatus', "Ferdig - "+(isochroneLayers.length/2)+" isochroner.");
+}
+
+function clearWeatherWindow(){
+  setHtml('wwResults', '');
+  setEl('wwStatus', '');
+}
+
+async function batchPrefetchForRoute(pts, maxSegmentNM, startDate, endDate){
+  // Samle alle unike midt-posisjoner (avrundet til 0.1°)
+  const uniquePositions = new Map();
+  for(let i=0;i<pts.length-1;i++){
+    const [la1, lo1] = pts[i], [la2, lo2] = pts[i+1];
+    const subPts = splitSegment(la1, lo1, la2, lo2, maxSegmentNM);
+    for(let j=0;j<subPts.length-1;j++){
+      const [sLa1, sLo1] = subPts[j], [sLa2, sLo2] = subPts[j+1];
+      const midLa = (sLa1+sLa2)/2;
+      const midLo = (sLo1+sLo2)/2;
+      const key = Math.round(midLa*10)/10 + "," + Math.round(midLo*10)/10;
+      if(!uniquePositions.has(key)){
+        uniquePositions.set(key, [Math.round(midLa*10)/10, Math.round(midLo*10)/10]);
+      }
+    }
+  }
+  
+  console.log("Batch-prefetch for "+uniquePositions.size+" unike posisjoner");
+  
+  // ISO-format for Open-Meteo
+  const fmt = d => {
+    const pad = n => String(n).padStart(2,'0');
+    return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+  };
+  const startD = fmt(startDate);
+  const endD = fmt(endDate);
+  
+  // For hver posisjon: hent vind+strøm parallelt
+  const positions = Array.from(uniquePositions.values());
+  const promises = positions.map(async ([lat, lon], idx) => {
+    if(idx > 0 && idx % 5 === 0) {
+      // Pause hver 5. posisjon for å unngå rate-limit
+      await new Promise(r => setTimeout(r, 300));
+    }
+    
+    // VIND
+    try {
+      const windUrl = 'https://api.open-meteo.com/v1/forecast?latitude='+lat.toFixed(3)+
+        '&longitude='+lon.toFixed(3)+
+        '&hourly=wind_speed_10m,wind_direction_10m&wind_speed_unit=ms'+
+        '&start_date='+startD+'&end_date='+endD;
+      const r = await fetch(windUrl);
+      if(r.ok){
+        const j = await r.json();
+        if(j.hourly && j.hourly.time){
+          j.hourly.time.forEach((t, i) => {
+            const d = new Date(t);
+            const cacheK = (Math.round(lat*10)/10) + "," + (Math.round(lon*10)/10) + "," +
+                          d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') +
+                          String(d.getDate()).padStart(2,'0') + String(d.getHours()).padStart(2,'0');
+            windCache.set(cacheK, {
+              speed: j.hourly.wind_speed_10m[i],
+              dir: j.hourly.wind_direction_10m[i]
+            });
+          });
+        }
+      }
+    } catch(e){ console.warn("Vind-prefetch feilet for "+lat+","+lon); }
+    
+    // STRØM
+    try {
+      const currUrl = 'https://marine-api.open-meteo.com/v1/marine?latitude='+lat.toFixed(3)+
+        '&longitude='+lon.toFixed(3)+
+        '&hourly=ocean_current_velocity,ocean_current_direction'+
+        '&start_date='+startD+'&end_date='+endD;
+      const r2 = await fetch(currUrl);
+      if(r2.ok){
+        const j2 = await r2.json();
+        if(j2.hourly && j2.hourly.time){
+          j2.hourly.time.forEach((t, i) => {
+            const d = new Date(t);
+            const cacheK = (Math.round(lat*10)/10) + "," + (Math.round(lon*10)/10) + "," +
+                          d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') +
+                          String(d.getDate()).padStart(2,'0') + String(d.getHours()).padStart(2,'0');
+            currentCache.set(cacheK, {
+              speed: (j2.hourly.ocean_current_velocity[i]||0) * 0.539957,
+              dir: j2.hourly.ocean_current_direction[i] || 0
+            });
+          });
+        }
+      }
+    } catch(e){ console.warn("Strom-prefetch feilet for "+lat+","+lon); }
+	
+	// BØLGER
+    try {
+      const waveUrl = 'https://marine-api.open-meteo.com/v1/marine?latitude='+lat.toFixed(3)+
+        '&longitude='+lon.toFixed(3)+
+        '&hourly=wave_height,wave_direction,wave_period'+
+        '&start_date='+startD+'&end_date='+endD;
+      const r3 = await fetch(waveUrl);
+      if(r3.ok){
+        const j3 = await r3.json();
+        if(j3.hourly && j3.hourly.time){
+          j3.hourly.time.forEach((t, i) => {
+            const d = new Date(t);
+            const cacheK = (Math.round(lat*10)/10) + "," + (Math.round(lon*10)/10) + "," +
+                          d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') +
+                          String(d.getDate()).padStart(2,'0') + String(d.getHours()).padStart(2,'0');
+            wavesCache.set(cacheK, {
+              height: j3.hourly.wave_height[i] || 0,
+              dir: j3.hourly.wave_direction[i] || 0,
+              period: j3.hourly.wave_period[i] || 0
+            });
+          });
+        }
+      }
+    } catch(e){ console.warn("Bolge-prefetch feilet for "+lat+","+lon); }
+});
+    
+  await Promise.all(promises);
+  console.log("Prefetch ferdig. Wind-cache: "+windCache.size+" entries, Current-cache: "+currentCache.size);
+}
+
+async function findWeatherWindow(){
+  if(waypoints.length < 2){ alert("Trenger minst 2 waypoints."); return; }
+  const stepH = parseFloat(document.getElementById('wwStep').value) || 2;
+  const depInput = document.getElementById('departureTime').value;
+  const baseDate = depInput ? new Date(depInput) : new Date();
+  const candidates = [];
+  for(let h=-24;h<=24;h+=stepH){
+    candidates.push(new Date(baseDate.getTime() + h*3600000));
+  }
+  
+  const wwStart = Date.now();
+  setEl('wwStatus', "Prefetcher vinddata fra Open-Meteo...");
+  setHtml('wwResults', '');
+  
+  const motorRaw = document.getElementById('motorSpeed').value.trim();
+  const motorSpd = motorRaw === "" ? 0 : parseFloat(motorRaw) || 0;
+  const minSailRaw = document.getElementById('minSailSpeed').value.trim();
+  const minSailSpd = minSailRaw === "" ? 0 : parseFloat(minSailRaw) || 0;
+  const userMaxSeg = parseFloat(document.getElementById('maxSegmentNM').value) || 2;
+  const maxSegmentNM = Math.max(userMaxSeg, 5); // Bruker minst 5 NM for fart
+  const pts = waypoints.map(w => [w.marker.getLatLng().lat, w.marker.getLatLng().lng]);
+
+  // BATCH-PREFETCH: hent all vind+strøm for hele perioden i FÅ kall
+  // Hent 3 dager fra (avgang - 24t) for å dekke verste case
+  const prefetchStart = new Date(baseDate.getTime() - 30*3600000);
+  const prefetchEnd = new Date(baseDate.getTime() + 80*3600000); // 80t fremover dekker også lange ruter
+  
+  await batchPrefetchForRoute(pts, maxSegmentNM, prefetchStart, prefetchEnd);
+  
+  const prefetchTime = ((Date.now() - wwStart)/1000).toFixed(1);
+  setEl('wwStatus', "Prefetch ferdig ("+prefetchTime+"s). Beregner ruter...");
+
+  // NÅ KJØRER ALLE BEREGNINGER PÅ CACHE - LYNRASKT
+  const results = [];
+  for(let ci=0;ci<candidates.length;ci++){
+    const candDep = candidates[ci];
+    let totalH = 0, totalHnoCurrent = 0;
+    let currentTime = new Date(candDep.getTime());
+
+    for(let i=0;i<pts.length-1;i++){
+      const [la1,lo1] = pts[i], [la2,lo2] = pts[i+1];
+      const subPts = splitSegment(la1, lo1, la2, lo2, maxSegmentNM);
+      for(let j=0;j<subPts.length-1;j++){
+        const [sLa1, sLo1] = subPts[j], [sLa2, sLo2] = subPts[j+1];
+        const subNM = haversineNM(sLa1, sLo1, sLa2, sLo2);
+        const subCourse = bearing(sLa1, sLo1, sLa2, sLo2);
+        const subMLa = (sLa1+sLa2)/2, subMLo = (sLo1+sLo2)/2;
+        
+        // Disse er nå i cache - umiddelbar retur!
+        const wind = await getWindAt(subMLa, subMLo, currentTime);
+        const curr = await getCurrentAt(subMLa, subMLo, currentTime);
+        
+        const twa = Math.abs(((wind.dir-subCourse+540)%360)-180);
+        const vmgRes = vmgRouting(twa, wind.speed||0, motorSpd, minSailSpd);
+        const speed = vmgRes.speed;
+        const cRad = subCourse*Math.PI/180;
+        const bx = speed*Math.sin(cRad), by = speed*Math.cos(cRad);
+        const crRad = (curr.dir||0)*Math.PI/180;
+        const sx = (curr.speed||0)*Math.sin(crRad), sy = (curr.speed||0)*Math.cos(crRad);
+        const sogAlong = (bx+sx)*Math.sin(cRad)+(by+sy)*Math.cos(cRad);
+        const sog = Math.max(0.05, sogAlong);
+        const subHours = subNM/sog;
+        const subHoursNoCur = subNM/Math.max(0.05, speed);
+        totalH += subHours;
+        totalHnoCurrent += subHoursNoCur;
+        currentTime = new Date(currentTime.getTime()+subHours*3600000);
+      }
+    }
+    results.push({ departure: candDep, hours: totalH, hoursNoCurrent: totalHnoCurrent });
+  }
+
+  const totalTime = ((Date.now() - wwStart)/1000).toFixed(1);
+  console.log("Værvindu ferdig pa "+totalTime+"s");
+
+  const minH = Math.min(...results.map(r=>r.hours));
+  const maxHval = Math.max(...results.map(r=>r.hours));
+  const range = maxHval - minH || 1;
+  const box = document.getElementById('wwResults');
+  box.innerHTML = '';
+  results.forEach(r => {
+    const isMin = r.hours === minH;
+    const isMax = r.hours === maxHval;
+    const widthPct = ((r.hours - minH) / range * 80 + 20).toFixed(0);
+    const cls = isMin ? 'best' : isMax ? 'worst' : '';
+    const depFmt = r.departure.toLocaleString('nb-NO',{weekday:'short',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    const row = document.createElement('div');
+    row.className = 'ww-row';
+    row.innerHTML = '<div class="ww-time">'+depFmt+'</div>'+
+      '<div class="ww-bar '+cls+'" style="width:'+widthPct+'%"></div>'+
+      '<div class="ww-eta">'+fmtT(r.hours)+'</div>';
+    row.onclick = () => {
+      const d = new Date(r.departure);
+      d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+      document.getElementById('departureTime').value = d.toISOString().slice(0,16);
+      calculateRoute();
+    };
+    row.title = 'Med strom: '+fmtT(r.hours)+'\nUten strom: '+fmtT(r.hoursNoCurrent)+'\nKlikk for a velge';
+    box.appendChild(row);
+  });
+
+  const best = results.reduce((a,b) => a.hours < b.hours ? a : b);
+  setHtml('wwStatus', '<b>Beste:</b> '+best.departure.toLocaleString('nb-NO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' ('+fmtT(best.hours)+'). '+
+    'Beregnet pa '+totalTime+'s. Klikk rad for a velge.');
+}
+
+const STORAGE_KEY = "seilrute_routes_v8";
+function getRoutes(){ return JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}"); }
+function setRoutes(r){ localStorage.setItem(STORAGE_KEY, JSON.stringify(r)); }
+function saveRoute(){
+  const name = document.getElementById('routeName').value.trim();
+  if(!name){ alert("Skriv inn rutenavn."); return; }
+  if(waypoints.length < 2){ alert("Trenger minst 2 waypoints."); return; }
+  const routes = getRoutes();
+  routes[name] = {
+    waypoints: waypoints.map(w => { const ll = w.marker.getLatLng(); return [ll.lat, ll.lng]; }),
+    boat: boatSelect.value,
+    motorSpeed: document.getElementById('motorSpeed').value,
+    minSailSpeed: document.getElementById('minSailSpeed').value,
+    maxSegmentNM: document.getElementById('maxSegmentNM').value,
+    departureTime: document.getElementById('departureTime').value,
+    saved: new Date().toISOString()
+  };
+  setRoutes(routes);
+  document.getElementById('routeName').value = "";
+  renderRouteList();
+}
+function loadRoute(name){
+  const routes = getRoutes();
+  const r = routes[name]; if(!r) return;
+  clearRoute();
+  r.waypoints.forEach(([la,lo]) => addWaypoint(la, lo));
+  if(r.boat && polars[r.boat]){ boatSelect.value = r.boat; onBoatChange(); }
+  if(r.motorSpeed !== undefined) document.getElementById('motorSpeed').value = r.motorSpeed;
+  if(r.minSailSpeed !== undefined) document.getElementById('minSailSpeed').value = r.minSailSpeed;
+  if(r.maxSegmentNM !== undefined) document.getElementById('maxSegmentNM').value = r.maxSegmentNM;
+  if(r.departureTime) document.getElementById('departureTime').value = r.departureTime;
+  const grp = L.featureGroup(waypoints.map(w => w.marker));
+  map.fitBounds(grp.getBounds().pad(0.2));
+}
+function deleteRoute(name){
+  if(!confirm("Slette "+name+"?")) return;
+  const routes = getRoutes();
+  delete routes[name];
+  setRoutes(routes);
+  renderRouteList();
+}
+function renderRouteList(){
+  const list = document.getElementById('routeList');
+  const routes = getRoutes();
+  const keys = Object.keys(routes);
+  if(!keys.length){ list.innerHTML = "<i>Ingen lagrede ruter.</i>"; return; }
+  list.innerHTML = keys.map(k => {
+    const r = routes[k], dt = new Date(r.saved).toLocaleDateString();
+    return '<div><span><b>'+k+'</b> <small style="color:#888">('+r.waypoints.length+' wp, '+dt+')</small></span>'+
+      '<span><button class="ok" onclick="loadRoute(\''+k+'\')">Last</button>'+
+      '<button class="warn" onclick="deleteRoute(\''+k+'\')">Slett</button></span></div>';
+  }).join("");
+}
+
+setTimeout(() => map.invalidateSize(), 200);
+// Re-tegn ruten når checkbox endres
+document.getElementById('showVmgPaths').addEventListener('change', () => {
+  if(waypoints.length >= 2) calculateRoute();
+});
+drawPolar();
+renderRouteList();
+</script>
+</body>
+</html>
