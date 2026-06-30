@@ -58,13 +58,129 @@ canvas{display:block;margin:0 auto;background:#fafbfc;border-radius:6px}
 </style>
 </head>
 <body>
+
+<div id="helpModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:white;border-radius:8px;max-width:800px;max-height:90vh;width:90%;overflow-y:auto;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,0.3);">
+    <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #0b3d66;padding-bottom:10px;margin-bottom:15px;">
+      <h2 style="margin:0;color:#0b3d66">📚 Hjelp - Seilrute Pro v1.0</h2>
+      <button onclick="hideHelp()" style="background:#c92a2a;padding:5px 12px;font-size:14px;">✕ Lukk</button>
+    </div>
+    
+    <h3 style="color:#0b3d66">🚀 Hurtigstart</h3>
+    <ol style="line-height:1.8">
+      <li><b>Klikk i kartet</b> for å sette waypoints (minst 2)</li>
+      <li><b>Velg båt</b> i polar-seksjonen (eller last ORC-database)</li>
+      <li><b>Sett avgangstidspunkt</b> og motorfart</li>
+      <li><b>Klikk Beregn</b> - få full analyse</li>
+    </ol>
+    
+    <h3 style="color:#0b3d66">🗺 Kartvalg</h3>
+    <p>Klikk lagikonet øverst til høyre i kartet for å velge mellom:</p>
+    <ul style="line-height:1.8">
+      <li><b>Kartverket Sjøkart</b> - offisielle norske sjøkart (anbefalt)</li>
+      <li><b>Kartverket Topo</b> - topografisk kart</li>
+      <li><b>Esri Ocean</b> - internasjonalt havkart</li>
+      <li><b>Esri Satellitt</b> - satellittbilder</li>
+      <li><b>OpenStreetMap</b> - åpent kart</li>
+      <li><b>CartoDB</b> - lyst kart</li>
+      <li><b>OpenSeaMap-overlay</b> - sjømerker (kan kombineres)</li>
+    </ul>
+    
+    <h3 style="color:#0b3d66">⛵ Båt og polardiagram</h3>
+    <ul style="line-height:1.8">
+      <li><b>Innebygd</b>: Dufour 40 Performance og J/109</li>
+      <li><b>ORC-database</b>: 1900+ norske båter med ekte VPP-data</li>
+      <li><b>Last .pol-fil</b>: Egen polardiagram i ORC-format</li>
+    </ul>
+    
+    <h3 style="color:#0b3d66">🎯 Motor- og seil-logikk</h3>
+    <ul style="line-height:1.8">
+      <li><b>Motorfart = 0 (blank)</b>: Kun seil</li>
+      <li><b>Motorfart > 0</b>: Motor brukes hvis seilfart < min seilfart</li>
+      <li><b>Min seilfart</b>: Terskel for når motor starter automatisk</li>
+      <li><b>Maks segment NM</b>: Lange etapper deles for nøyaktig analyse</li>
+    </ul>
+    
+    <h3 style="color:#0b3d66">💡 Jibe/Slag-tips</h3>
+    <p>Grønne stiplete linjer = anbefalt jibe (med vinden)<br>
+    Røde stiplete linjer = anbefalt slag (mot vinden)</p>
+    <p>Tipsene vises kun ved klart kryss (TWA < 40°) eller dyp lens (TWA > 150°) 
+    med minst 10% gevinst. Bruk checkboksen "Vis VMG-baner" for å skru av/på.</p>
+    
+    <h3 style="color:#0b3d66">🌐 Isochroner</h3>
+    <p>Tegner hvor langt du kommer i 1h, 2h, 3h osv. basert på vind og polar. 
+    Tar hensyn til land og grunne områder.</p>
+    
+    <h3 style="color:#0b3d66">🌬 Værvindu-finder</h3>
+    <p>Tester +/- 24 timer fra avgangstidspunktet for å finne raskeste avgang. 
+    Klikk en rad i resultatlisten for å velge den avgangen.</p>
+    
+    <h3 style="color:#0b3d66">🌊 Tidevann, strøm og bølger</h3>
+    <ul style="line-height:1.8">
+      <li><b>Tidevann</b>: Fra Kartverket (sehavniva.no)</li>
+      <li><b>Strøm</b>: Fra Open-Meteo Marine API</li>
+      <li><b>Bølger</b>: Fargekodet etter høyde (grønn/oransje/rød)</li>
+    </ul>
+    
+    <h3 style="color:#0b3d66">🏔 Landunngåelse</h3>
+    <p>Algoritmen bruker piksler fra Kartverkets offisielle sjøkart for å detektere:</p>
+    <ul style="line-height:1.8">
+      <li>🟡 Land (gule områder)</li>
+      <li>🌫 Tidevannssoner (grønne)</li>
+      <li>🟦 Grunne områder (lyseblå)</li>
+      <li>⚪ Trygt seil-vann (hvit)</li>
+    </ul>
+    
+    <h3 style="color:#0b3d66">⌨ Tastatursnarveier</h3>
+    <ul style="line-height:1.8">
+      <li><b>F11</b>: Fullskjerm</li>
+      <li><b>F12</b>: Utviklerverktøy (for feilsøking)</li>
+    </ul>
+    
+    <h3 style="color:#0b3d66">💾 Lagring av ruter</h3>
+    <p>Skriv navn i feltet og klikk "Lagre". Ruter lagres lokalt i nettleseren 
+    og kan lastes senere med alle innstillinger.</p>
+    
+    <h3 style="color:#0b3d66;background:#fff3cd;padding:8px;border-radius:4px;border-left:4px solid #c92a2a;">⚠ Viktige forbehold</h3>
+    <ul style="line-height:1.8">
+      <li>🚤 <b>Ikke et erstatning for offisielle sjøkart eller GPS</b></li>
+      <li>📊 Polardata er estimat - bruk ORC-sertifikat for nøyaktighet</li>
+      <li>🌬 Vind-/strømdata kan være forsinket eller mangle</li>
+      <li>⚓ Lokalkunnskap og sjømannskap er nummer én</li>
+      <li>🌊 Tidevannsdata krever Kartverket-API som av og til er nede</li>
+    </ul>
+    <p style="background:#fff3cd;padding:8px;border-radius:4px;font-weight:bold;color:#856404;text-align:center;">
+      Bruk appen som <b>beslutningsstøtte</b>, ikke autopilot!
+    </p>
+    
+    <h3 style="color:#0b3d66">📡 Datakilder</h3>
+    <ul style="line-height:1.8">
+      <li><b>Sjøkart</b>: Kartverket (kartverket.no)</li>
+      <li><b>Vind/Strøm/Bølger</b>: Open-Meteo (open-meteo.com)</li>
+      <li><b>Tidevann</b>: Kartverket Sehavniva</li>
+      <li><b>Polar-database</b>: ORC (data.orc.org) og jieter/orc-data</li>
+      <li><b>Vind-visualisering</b>: Windy (windy.com)</li>
+    </ul>
+    
+    <h3 style="color:#0b3d66">💌 Tilbakemelding</h3>
+    <p>Forslag, feil eller spørsmål? Ta kontakt med Odd Andre Harrang.</p>
+    
+    <p style="text-align:center;color:#888;font-size:11px;margin-top:20px;border-top:1px solid #ddd;padding-top:10px;">
+      Seilrute Pro v1.0 - Bygget med passion for seil ⛵🌊<br>
+      God seilsommer!
+    </p>
+  </div>
+</div>
+
 <header>
-<h1>Set Sail</h1>
+<h1>Seilrute Pro v1.0</h1>
 <div>
+<button onclick="showHelp()" style="background:#0d6efd">📚 Hjelp</button>
 <button onclick="clearRoute()">Tom rute</button>
 <button class="sec" onclick="removeLast()">Fjern siste</button>
 <button class="ok" onclick="calculateRoute()">Beregn</button>
 </div>
+</header>
 </header>
 <div id="fatalWarn" class="warn-box"></div>
 <div id="fileWarn" class="warn-box">Kjorer via file:// - bygg som Electron-app for full funksjonalitet.</div>
@@ -568,7 +684,7 @@ L.control.layers({
   "Kartverket Sjokart": kvSjokart, "Kartverket Topo": kvTopo,
   "Esri Ocean": esriOcean, "Esri Satellitt": esriSat,
   "OpenStreetMap": osm, "CartoDB": carto
-}, { "OpenSeaMap (sjomerker)": openseamap }, {position:'topright', collapsed:false}).addTo(map);
+}, { "OpenSeaMap (sjomerker)": openseamap }, {position:'topright', collapsed:true}).addTo(map);
 
 map.on('click', e => addWaypoint(e.latlng.lat, e.latlng.lng));
 
