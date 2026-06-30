@@ -163,7 +163,10 @@ canvas{display:block;margin:0 auto;background:#fafbfc;border-radius:6px}
     </ul>
     
     <h3 style="color:#0b3d66">💌 Tilbakemelding</h3>
-    <p>Forslag, feil eller spørsmål? Ta kontakt med Odd Andre Harrang.</p>
+    <p>Forslag, feil eller spørsmål?</p>
+<p>
+  https://github.com/oddandre/seilrute-pro/issues/new📝 Rapporter feil eller forslag</a>
+</p>
     
     <p style="text-align:center;color:#888;font-size:11px;margin-top:20px;border-top:1px solid #ddd;padding-top:10px;">
       Seilrute Pro v1.0 - Bygget med passion for seil ⛵🌊<br>
@@ -175,10 +178,10 @@ canvas{display:block;margin:0 auto;background:#fafbfc;border-radius:6px}
 <header>
 <h1>Seilrute Pro v1.0</h1>
 <div>
-<button onclick="showHelp()" style="background:#0d6efd">📚 Hjelp</button>
 <button onclick="clearRoute()">Tom rute</button>
 <button class="sec" onclick="removeLast()">Fjern siste</button>
 <button class="ok" onclick="calculateRoute()">Beregn</button>
+<button onclick="showHelp()" style="background:#0d6efd">📚 Hjelp</button>
 </div>
 </header>
 </header>
@@ -314,6 +317,37 @@ function setHtml(id, html){
   const el = document.getElementById(id);
   if(el) el.innerHTML = html;
 }
+
+function showHelp(){
+  const modal = document.getElementById('helpModal');
+  if(modal){
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';  // Hindrer scrolling bak modalen
+  }
+}
+
+function hideHelp(){
+  const modal = document.getElementById('helpModal');
+  if(modal){
+    modal.style.display = 'none';
+    document.body.style.overflow = '';
+  }
+}
+
+// Lukk modal når man klikker utenfor (på den mørke overlayen)
+document.addEventListener('DOMContentLoaded', () => {
+  const modal = document.getElementById('helpModal');
+  if(modal){
+    modal.addEventListener('click', (e) => {
+      if(e.target === modal) hideHelp();
+    });
+  }
+  // ESC-tasten lukker modalen
+  document.addEventListener('keydown', (e) => {
+    if(e.key === 'Escape') hideHelp();
+  });
+});
+
 
 if (location.protocol === 'file:') document.getElementById('fileWarn').style.display = 'block';
 
