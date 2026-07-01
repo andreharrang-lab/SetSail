@@ -115,22 +115,28 @@ body.sidebar-hidden .sidebar{
 /* Toggle-knappen */
 .sidebar-toggle{
   position: absolute;
-  top: 10px;
+  top: 50%;
   right: 10px;
+  transform: translateY(-50%);
   z-index: 1000;
-  background: #0b3d66;
+  background: rgba(11, 61, 102, 0.9);
   color: white;
-  border: none;
-  border-radius: 50%;
-  width: 44px;
-  height: 44px;
-  font-size: 20px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-radius: 8px;        /* Firkantet med runde hjørner */
+  width: 32px;
+  height: 60px;               /* Høyere enn bred */
+  font-size: 16px;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
   transition: all 0.2s;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.sidebar-toggle:hover{
+  transform: translateY(-50%) scale(1.05);
+  background: rgba(45, 138, 62, 0.95);
 }
 
 .sidebar-toggle:hover{
@@ -289,7 +295,7 @@ body.sidebar-hidden #map{
 
 <div class="layout">
 <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()" title="Vis/skjul sidepanel">
-  ◀
+  ▶
 </button>
 <div id="map"></div>
 <div class="sidebar">
@@ -418,7 +424,7 @@ function toggleSidebar(){
   const isHidden = document.body.classList.toggle('sidebar-hidden');
   const btn = document.getElementById('sidebarToggle');
   if(btn){
-    btn.innerHTML = isHidden ? '▶' : '◀';
+    btn.innerHTML = isHidden ? '◀' : '▶';
     btn.title = isHidden ? 'Vis sidepanel' : 'Skjul sidepanel';
   }
   
