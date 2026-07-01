@@ -208,7 +208,7 @@ body.motor-mode header{
     <h3 style="color:#0b3d66">💌 Tilbakemelding</h3>
     <p>Forslag, feil eller spørsmål?</p>
 <p>
-  https://github.com/andreharrang-lab/SetSail/issues/new📝 Rapporter feil eller forslag</a>
+  <a href="https://github.com/andreharrang-lab/SetSail/issues/new" target="_blank">📝 Rapporter feil eller forslag</a>
 </p>
     
     <p style="text-align:center;color:#888;font-size:11px;margin-top:20px;border-top:1px solid #ddd;padding-top:10px;">
@@ -226,18 +226,18 @@ body.motor-mode header{
     <span class="tab-icon">🚤</span>Motorboat
   </button>
 </div>
+	
 <header>
 <h1 id="mainTitle">⛵ Let's GO</h1>
-<h1>SetSail</h1>
 <div>
 <button onclick="clearRoute()">Tøm rute</button>
 <button class="sec" onclick="removeLast()">Fjern siste WP</button>
 <button class="ok" onclick="calculateRoute()">Beregn</button>
-<button onclick="window.open('https://github.com/DITT-andreharrang-lab/SetSail/blob/main/README.md', '_blank')" style="background:#0d6efd">📚 Hjelp</button>
-<button onclick="window.open('https://github.com/DITT-andreharrang-lab/SetSail/issues/new', '_blank')" style="background:#fd7e14">💬 Tilbakemelding</button>
+<button onclick="window.open('https://github.com/andreharrang-lab/SetSail/blob/main/README.md', '_blank')" style="background:#0d6efd">📚 Hjelp</button>
+<button onclick="window.open('https://github.com/andreharrang-lab/SetSail/issues/new', '_blank')" style="background:#fd7e14">💬 Tilbakemelding</button>
 </div>
 </header>
-</header>
+
 <div id="fatalWarn" class="warn-box"></div>
 <div id="fileWarn" class="warn-box">Kjorer via file:// - bygg som Electron-app for full funksjonalitet.</div>
 <div id="tileWarn" class="warn-box">Kart kunne ikke lastes - bytt kartlag.</div>
@@ -302,14 +302,14 @@ body.motor-mode header{
 </div>
 
 <div class="card hide-in-motor-mode">
-<h2>Isochroner</h2>
-<div class="row"><label>Max timer</label><input type="number" id="isoMaxHours" value="6" min="1" max="24" step="1"></div>
-<div class="row"><label>Tidssteg h</label><input type="number" id="isoStep" value="1" min="0.5" max="6" step="0.5"></div>
-<div class="row">
-<button class="ok" onclick="drawIsochrones()">Tegn isochroner</button>
-<button class="sec" onclick="clearIsochrones()">Tom</button>
-</div>
-<div id="isoStatus" style="font-size:11px;color:#555;margin-top:4px;"></div>
+	<h2>Isochroner</h2>
+	<div class="row"><label>Max timer</label><input type="number" id="isoMaxHours" value="6" min="1" max="24" step="1"></div>
+	<div class="row"><label>Tidssteg h</label><input type="number" id="isoStep" value="1" min="0.5" max="6" step="0.5"></div>
+	<div class="row">
+		<button class="ok" onclick="drawIsochrones()">Tegn isochroner</button>
+		<button class="sec" onclick="clearIsochrones()">Tom</button>
+	</div>
+	<div id="isoStatus" style="font-size:11px;color:#555;margin-top:4px;"></div>
 </div>
 
 <div class="card">
@@ -399,7 +399,7 @@ function switchMode(mode){
     document.body.classList.remove('motor-mode');
     document.getElementById('tabSail').classList.add('active');
     document.getElementById('tabMotor').classList.remove('active');
-    document.getElementById('mainTitle').innerHTML = '⛵ Let's GO';
+    document.getElementById('mainTitle').innerHTML = '⛵ Let\s GO';
     
     const motorInfo = document.getElementById('motorModeInfo');
     if(motorInfo) motorInfo.style.display = 'none';
@@ -416,6 +416,30 @@ function switchMode(mode){
   }
 }
 
+
+	// Kombinert oppstartslogikk
+window.addEventListener('load', () => {
+  // Last modus-preferanse
+  const savedMode = localStorage.getItem('seilrute_mode') || 'sail';
+  if(savedMode === 'motor'){
+    switchMode('motor');
+  }
+  
+  // Sett opp modal-lukking
+  const modal = document.getElementById('helpModal');
+  if(modal){
+    modal.addEventListener('click', (e) => {
+      if(e.target === modal) hideHelp();
+    });
+  }
+  
+  // ESC-tasten lukker modalen
+  document.addEventListener('keydown', (e) => {
+    if(e.key === 'Escape') hideHelp();
+  });
+});
+
+/*
 // Last preferanse ved oppstart
 document.addEventListener('DOMContentLoaded', () => {
   const savedMode = localStorage.getItem('seilrute_mode') || 'sail';
@@ -423,6 +447,7 @@ document.addEventListener('DOMContentLoaded', () => {
     switchMode('motor');
   }
 });
+*/
 	
 function setHtml(id, html){
   const el = document.getElementById(id);
@@ -445,6 +470,7 @@ function hideHelp(){
   }
 }
 
+	/*
 // Lukk modal når man klikker utenfor (på den mørke overlayen)
 document.addEventListener('DOMContentLoaded', () => {
   const modal = document.getElementById('helpModal');
@@ -458,7 +484,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if(e.key === 'Escape') hideHelp();
   });
 });
-
+*/
 
 if (location.protocol === 'file:') document.getElementById('fileWarn').style.display = 'block';
 
@@ -1707,7 +1733,7 @@ if(j === 0 && showVmg){
 
 // Bare vis sik-sak hvis vinkelen er stor nok til å være visuelt meningsfull
 const minAngleForDisplay = 10;
-if(jibeAdvice && document.getElementById('showVmgPaths').checked && parseFloat(jibeAdvice.angleOff) >= minAngleForDisplay){isLand
+if(jibeAdvice && document.getElementById('showVmgPaths').checked && parseFloat(jibeAdvice.angleOff) >= minAngleForDisplay){
   const startLa = pts[i][0], startLo = pts[i][1];
   const endLa = pts[i+1][0], endLo = pts[i+1][1];
   const segCourse = bearing(startLa, startLo, endLa, endLo);
