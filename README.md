@@ -1,6 +1,6 @@
 🚤 SAIL PLANNER - Nautical route planner featuring wind, currents, waves, and tactical VMG routing
 
-👉 https://oddandre.github.io/seilrute-pro/ 👈
+👉 https://oddandre.github.io/SetSail/ 👈
 
 
 ## ✨ Features
@@ -58,4 +58,4 @@
 ## 🛟 Feedback
 
 Suggestions, bugs, or questions? Create an Issue!
-(https://github.com/oddandre/seilrute-pro/issues)!
+(https://github.com/oddandre/SetSail/issues)!
