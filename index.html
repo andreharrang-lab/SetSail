@@ -55,6 +55,49 @@ canvas{display:block;margin:0 auto;background:#fafbfc;border-radius:6px}
 .ww-bar.worst{background:#c92a2a}
 .ww-time{font-family:monospace;font-size:10px;width:90px;flex-shrink:0}
 .ww-eta{font-family:monospace;font-size:10px;width:60px;flex-shrink:0;text-align:right}
+
+	/* Faner */
+.tab-bar{
+  display:flex;
+  background:#0b3d66;
+  border-bottom:2px solid #073050;
+}
+.tab-btn{
+  background:#0b3d66;
+  color:#a5c8e5;
+  border:none;
+  padding:10px 20px;
+  cursor:pointer;
+  font-size:14px;
+  font-weight:bold;
+  border-right:1px solid #073050;
+  transition:all 0.2s;
+}
+.tab-btn:hover{
+  background:#0d4a7d;
+  color:white;
+}
+.tab-btn.active{
+  background:white;
+  color:#0b3d66;
+  border-bottom:3px solid #2b8a3e;
+}
+.tab-btn .tab-icon{
+  font-size:18px;
+  margin-right:6px;
+}
+/* Skjul motorbåt-modus visse kort */
+body.motor-mode .hide-in-motor-mode{
+  display:none !important;
+}
+body.motor-mode .hide-in-motor-mode-flex{
+  display:none !important;
+}
+/* Visuell indikator på hvilken modus vi er i */
+body.motor-mode header{
+  background:#0d4a7d;
+}
+
 </style>
 </head>
 <body>
@@ -169,13 +212,22 @@ canvas{display:block;margin:0 auto;background:#fafbfc;border-radius:6px}
 </p>
     
     <p style="text-align:center;color:#888;font-size:11px;margin-top:20px;border-top:1px solid #ddd;padding-top:10px;">
-      SetSail - Bygget med passion for seil ⛵🌊<br>
+      Let's GO - Build with passion for the water<br>
       God seilsommer!
     </p>
   </div>
 </div>
 
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="switchMode('sail')" id="tabSail">
+    <span class="tab-icon">⛵</span>Sailboat
+  </button>
+  <button class="tab-btn" onclick="switchMode('motor')" id="tabMotor">
+    <span class="tab-icon">🚤</span>Motorboat
+  </button>
+</div>
 <header>
+<h1 id="mainTitle">⛵ Let's GO</h1>
 <h1>SetSail</h1>
 <div>
 <button onclick="clearRoute()">Tøm rute</button>
@@ -206,14 +258,15 @@ canvas{display:block;margin:0 auto;background:#fafbfc;border-radius:6px}
 	<h2>Reisetidspunkt og fart</h2>
 	<div class="row"><label>Avgang</label><input type="datetime-local" id="departureTime"></div>
 	<div class="row"><label>Motorfart kn</label><input type="number" id="motorSpeed" placeholder="Blank = kun seil" step="0.1" min="0"></div>
-	<div class="row"><label>Min seilfart kn</label><input type="number" id="minSailSpeed" placeholder="0 = ingen min" step="0.1" min="0" value="4"></div>
+	<div class="row hide-in-motor-mode"><label>Min seilfart kn</label><input type="number" id="minSailSpeed" placeholder="0 = ingen min" step="0.1" min="0" value="4"></div>
 	<div class="row"><label>Maks segment NM</label><input type="number" id="maxSegmentNM" value="2" step="0.5" min="0.5"></div>
-	<div style="font-size:11px;color:#555">Motor starter automatisk hvis seilfart under min.</div>
-	<div class="row" style="margin-top:6px;">
-		<label style="flex:1;font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer;">
-		<input type="checkbox" id="showVmgPaths" checked style="width:auto;margin:0;"> Vis VMG-baner (slag/jibe) på kartet
-		</label>
-	</div>
+	<div style="font-size:11px;color:#555" class="hide-in-motor-mode">Motor starter automatisk hvis seilfart under min.</div>
+	<div style="font-size:11px;color:#555" id="motorModeInfo" style="display:none">Reisetid beregnes med motorfart. Vind/bølger vises for komfort.</div>
+	<div class="row hide-in-motor-mode" style="margin-top:6px;">
+<label style="flex:1;font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer;">
+<input type="checkbox" id="showVmgPaths" checked style="width:auto;margin:0;"> Vis VMG-baner (slag/jibe) på kartet
+</label>
+</div>
 </div>
 
 
@@ -248,7 +301,7 @@ canvas{display:block;margin:0 auto;background:#fafbfc;border-radius:6px}
 <div id="segments">Klikk i kartet for waypoints (min 2).</div>
 </div>
 
-<div class="card">
+<div class="card hide-in-motor-mode">
 <h2>Isochroner</h2>
 <div class="row"><label>Max timer</label><input type="number" id="isoMaxHours" value="6" min="1" max="24" step="1"></div>
 <div class="row"><label>Tidssteg h</label><input type="number" id="isoStep" value="1" min="0.5" max="6" step="0.5"></div>
@@ -275,7 +328,7 @@ canvas{display:block;margin:0 auto;background:#fafbfc;border-radius:6px}
 <iframe id="windyFrame" src="https://embed.windy.com/embed2.html?lat=63&lon=10&zoom=7&level=surface&overlay=wind&menu=&type=map&metricWind=m/s"></iframe>
 </div>
 
-<div class="card">
+<div class="card hide-in-motor-mode">
 <h2>Bat og polardiagram</h2>
 <div class="row"><label>Bat</label><select id="boatSelect" onchange="onBoatChange()"></select></div>
 <div class="row"><label>.pol fil</label><input type="file" id="polFile" accept=".pol,.txt,.csv" onchange="loadPolFile(event)"></div>
@@ -283,7 +336,7 @@ canvas{display:block;margin:0 auto;background:#fafbfc;border-radius:6px}
 <div id="polarInfo" style="font-size:11px;color:#555;margin-top:4px;"></div>
 </div>
 
-<div class="card">
+<div class="card hide-in-motor-mode">
 <h2>ORC-database</h2>
 <div class="row"><label>Land</label>
 <select id="orcCountry">
@@ -314,6 +367,63 @@ function setEl(id, text){
 }
 let calculatingRoute = false;
 
+// Fane-håndtering
+function switchMode(mode){
+  if(mode === 'motor'){
+    document.body.classList.add('motor-mode');
+    document.getElementById('tabSail').classList.remove('active');
+    document.getElementById('tabMotor').classList.add('active');
+    document.getElementById('mainTitle').innerHTML = '🚤 Seilrute Pro v1.0 - Motorbåt';
+    
+    // Vis motorbåt-info
+    const motorInfo = document.getElementById('motorModeInfo');
+    if(motorInfo) motorInfo.style.display = 'block';
+    
+    // Sett motorfart hvis ikke satt (default 15 kn for motorbåt)
+    const motorInput = document.getElementById('motorSpeed');
+    if(motorInput && !motorInput.value){
+      motorInput.value = 15;
+    }
+    // Sett min seilfart til 0 så motor alltid brukes
+    const minSail = document.getElementById('minSailSpeed');
+    if(minSail) minSail.value = 0;
+    
+    // Lagre preferanse
+    localStorage.setItem('seilrute_mode', 'motor');
+    
+    // Beregn på nytt hvis waypoints finnes
+    if(typeof waypoints !== 'undefined' && waypoints.length >= 2){
+      calculateRoute();
+    }
+  } else {
+    document.body.classList.remove('motor-mode');
+    document.getElementById('tabSail').classList.add('active');
+    document.getElementById('tabMotor').classList.remove('active');
+    document.getElementById('mainTitle').innerHTML = '⛵ Let's GO';
+    
+    const motorInfo = document.getElementById('motorModeInfo');
+    if(motorInfo) motorInfo.style.display = 'none';
+    
+    // Sett min seilfart tilbake til 4 kn hvis den var 0
+    const minSail = document.getElementById('minSailSpeed');
+    if(minSail && minSail.value === '0') minSail.value = 4;
+    
+    localStorage.setItem('seilrute_mode', 'sail');
+    
+    if(typeof waypoints !== 'undefined' && waypoints.length >= 2){
+      calculateRoute();
+    }
+  }
+}
+
+// Last preferanse ved oppstart
+document.addEventListener('DOMContentLoaded', () => {
+  const savedMode = localStorage.getItem('seilrute_mode') || 'sail';
+  if(savedMode === 'motor'){
+    switchMode('motor');
+  }
+});
+	
 function setHtml(id, html){
   const el = document.getElementById(id);
   if(el) el.innerHTML = html;
@@ -1588,7 +1698,10 @@ if(j === 0 && showVmg){
 	const avgTwa = etappeSubCount ? etappeTwaSum/etappeSubCount : 0;
 	const avgSailSpeed = etappeSubCount ? etappeSailSpeedSum/etappeSubCount : 0;
 	// Sjekk om jibe/slag gir fordel
-	const jibeAdvice = evaluateJibeAdvantage(avgTwa, avgWindSpd, motorSpd, minSailSpd, etappeNM, avgCourse, avgWindDir);
+	// I motor-modus: ingen jibe/slag-tips
+	const jibeAdvice = document.body.classList.contains('motor-mode') ? 
+  		null : 
+ 		 evaluateJibeAdvantage(avgTwa, avgWindSpd, motorSpd, minSailSpd, etappeNM, avgCourse, avgWindDir);
 	// Tegn ANBEFALT jibe/slag-bane (grønn stiplet) hvis checkbox er på
 
 
@@ -1698,8 +1811,11 @@ const sailSpeedColor = avgSailSpeed >= (parseFloat(document.getElementById('minS
 
 seg.innerHTML += '<div><b>WP'+(i+1)+' -> WP'+(i+2)+'</b> ('+(subPts.length-1)+' delsegmenter)<br>'+
   tFmt(segStart)+' -> '+tFmt(currentTime)+'<br>'+
-  'Kurs: <b>'+avgCourse.toFixed(0)+'°</b> | Vind snitt: '+windStr+'<br>'+
-  'TWA: <b>'+avgTwa.toFixed(0)+'°</b>'+twaLabel+' | Polar-fart: <b style="color:'+sailSpeedColor+'">'+avgSailSpeed.toFixed(1)+' kn</b><br>'+
+  'Kompasskurs: <b>'+avgCourse.toFixed(0)+'°</b> | Vind snitt: '+windStr+'<br>'+
+  (document.body.classList.contains('motor-mode') ? 
+  '' : 
+  'TWA: <b>'+avgTwa.toFixed(0)+'°</b>'+twaLabel+' | Polar-fart: <b style="color:'+sailSpeedColor+'">'+avgSailSpeed.toFixed(1)+' kn</b><br>'
+)+
   'Distanse: '+etappeNM.toFixed(2)+' NM | Maks bølge: '+waveStr+ '<br>'+
   (jibeAdvice ? '<div style="background:#fff3cd;padding:4px;border-radius:3px;margin:4px 0;font-size:11px;">💡 <b>'+jibeAdvice.type+'-tips:</b> Seil i Z-mønster med TWA '+jibeAdvice.bestTWA+'° → <b style="color:#2b8a3e">sparer '+jibeAdvice.savedMin+' min ('+jibeAdvice.gainPct+'% raskere)</b><br>Direkte: '+jibeAdvice.directSpeed+' kn (lange ben). Taktisk: '+jibeAdvice.optimalSpeed+' kn (kort ben '+jibeAdvice.extraDistancePct+'% lengre)</div>' : '')+
   modeStr+'<br>'+
@@ -1712,6 +1828,11 @@ seg.innerHTML += '<div><b>WP'+(i+1)+' -> WP'+(i+2)+'</b> ('+(subPts.length-1)+' 
   const diffH = totalHnoCurrent - totalH;
   setEl('currentDiff', (diffH >= 0 ? "+" : "-") + fmtT(Math.abs(diffH)));
   setEl('avgWind', n ? (windSum/n).toFixed(1)+" m/s" : "-");
+	  // Vis bølge-advarsel prominent i motor-modus
+if(document.body.classList.contains('motor-mode') && maxWaveTotal >= 1.5){
+  const wavColor = maxWaveTotal >= 2.5 ? '#c92a2a' : '#fd7e14';
+  console.log("Motorbåt-advarsel: Max bølger " + maxWaveTotal.toFixed(1) + "m");
+}
   setEl('avgSpeed', n ? (spdSum/n).toFixed(1)+" kn" : "-");
 
 // Fargekoding for total maks bølge
