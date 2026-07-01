@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Set Sail</title>
+	'>⛵</text></svg>">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
@@ -228,7 +229,7 @@ body.motor-mode header{
 </div>
 	
 <header>
-<h1 id="mainTitle">⛵ Let's GO</h1>
+<h1 id="mainTitle">⛵ Let's GO - Sailboat</h1>
 <div>
 <button onclick="clearRoute()">Tøm rute</button>
 <button class="sec" onclick="removeLast()">Fjern siste WP</button>
@@ -373,7 +374,7 @@ function switchMode(mode){
     document.body.classList.add('motor-mode');
     document.getElementById('tabSail').classList.remove('active');
     document.getElementById('tabMotor').classList.add('active');
-    document.getElementById('mainTitle').innerHTML = '🚤 Seilrute Pro v1.0 - Motorbåt';
+    document.getElementById('mainTitle').innerHTML = '🚤 Let's GO - Motorbåt';
     
     // Vis motorbåt-info
     const motorInfo = document.getElementById('motorModeInfo');
@@ -1109,10 +1110,10 @@ async function isLandKartverket(lat, lon){
       clearTimeout(timeout);
       try {
         const canvas = document.createElement('canvas');
-        canvas.width = 256;
-        canvas.height = 256;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
+		canvas.width = 256;
+		canvas.height = 256;
+		const ctx = canvas.getContext('2d', { willReadFrequently: true });
+		ctx.drawImage(img, 0, 0);
         
         // Sjekk 5 punkter rundt klikket for å unngå konturer/tekst
         const checkOffsets = [[0,0], [-2,0], [2,0], [0,-2], [0,2]];
@@ -1304,7 +1305,10 @@ async function fetchTide(lat,lon){
         }
       } catch(e){}
     }
-    if(!txt){ box.innerHTML = "<i>Tidevann ikke tilgjengelig (API svarte ikke).</i>"; return; }
+    if(!txt){ 
+  box.innerHTML = "<i>🌊 Tidevann midlertidig utilgjengelig fra Kartverket. Prøv igjen senere.</i>"; 
+  return; 
+}
     const xml = new DOMParser().parseFromString(txt, "text/xml");
     const wl = xml.getElementsByTagName("waterlevel");
     if(!wl.length){ box.innerHTML = "<i>Ingen tidevannsdata her.</i>"; return; }
@@ -2024,7 +2028,8 @@ async function batchPrefetchForRoute(pts, maxSegmentNM, startDate, endDate){
   const promises = positions.map(async ([lat, lon], idx) => {
     if(idx > 0 && idx % 5 === 0) {
       // Pause hver 5. posisjon for å unngå rate-limit
-      await new Promise(r => setTimeout(r, 300));
+      	//await new Promise(r => setTimeout(r, 300));
+		await new Promise(r => setTimeout(r, 500));
     }
     
     // VIND
