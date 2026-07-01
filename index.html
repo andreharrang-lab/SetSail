@@ -373,7 +373,7 @@ function switchMode(mode){
     document.body.classList.add('motor-mode');
     document.getElementById('tabSail').classList.remove('active');
     document.getElementById('tabMotor').classList.add('active');
-    document.getElementById('mainTitle').innerHTML = '🚤 Let's GO - Motorbåt';
+    document.getElementById('mainTitle').innerHTML = `⛵ Let's GO - Motorboat`;
     
     // Vis motorbåt-info
     const motorInfo = document.getElementById('motorModeInfo');
@@ -399,7 +399,7 @@ function switchMode(mode){
     document.body.classList.remove('motor-mode');
     document.getElementById('tabSail').classList.add('active');
     document.getElementById('tabMotor').classList.remove('active');
-    document.getElementById('mainTitle').innerHTML = '⛵ Let\s GO';
+    document.getElementById('mainTitle').innerHTML = `⛵ Let's GO - Sailboat`;
     
     const motorInfo = document.getElementById('motorModeInfo');
     if(motorInfo) motorInfo.style.display = 'none';
