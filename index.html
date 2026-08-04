@@ -136,7 +136,18 @@ body.sidebar-hidden #map{width:100%}
     </ul>
     <h3 style="color:#0b3d66">⭐ Favorittsteder</h3>
     <p>Høyreklikk i kartet for å lagre et favorittsted, eller skriv navn og klikk Legg til
-    for å lagre kartets sentrum. Klikk på en stjerne-pin for å gjøre den om til waypoint.</p>
+    for å lagre kartets sentrum. Klikk på en stjerne-pin for meny.</p>
+    <h3 style="color:#0b3d66">🔗 Del og sikkerhetskopier</h3>
+    <ul style="line-height:1.8">
+      <li><b>Delingslenke</b>: Lager en lenke med ruta innebygd. Send den til hvem som helst - de åpner appen med ruta ferdig plottet.</li>
+      <li><b>Eksporter alt</b>: Lagrer alle ruter og favoritter som JSON-fil. Bruk til backup eller for å dele hele samlingen.</li>
+      <li><b>Importer</b>: Leser inn en JSON-fil. Du velger om den skal legges til eller erstatte det du har.</li>
+      <li><b>GPX</b>: Eksporter rute eller favoritter i GPX-format for kartplottere og andre navigasjonsapper.</li>
+    </ul>
+    <p style="background:#e7f5ff;padding:8px;border-radius:4px;font-size:12px;">
+      <b>Tips:</b> Data lagres kun i din egen nettleser. Tar du en eksport med jevne mellomrom,
+      har du en trygg backup hvis du bytter maskin eller tømmer nettleserdata.
+    </p>
     <h3 style="color:#0b3d66">📡 Live sporing (GPS)</h3>
     <p>Klikk Start sporing for å følge din faktiske posisjon. Krever HTTPS og at du
     godkjenner posisjonstilgang. Viser fart, kurs, avstand til neste waypoint og avvik fra ruta.
@@ -318,6 +329,32 @@ Klikk på en <b>markør</b> for meny. Høyreklikk på markør sletter.<br>
 Legges til i kartets sentrum, eller høyreklikk i kartet.
 </div>
 <div id="favList"></div>
+</div>
+
+<div class="card">
+<h2>🔗 Del og sikkerhetskopier</h2>
+<div class="row">
+<button class="ok" onclick="shareCurrentRoute()">🔗 Kopier delingslenke</button>
+</div>
+<div style="font-size:10px;color:#888;margin:2px 0 8px;">
+Lager en lenke til ruta du har i kartet nå. Send den til hvem som helst.
+</div>
+<div class="row">
+<button class="sec" onclick="exportAllData()">📄 Eksporter alt</button>
+<button class="sec" onclick="document.getElementById('importFile').click()">📥 Importer</button>
+</div>
+<input type="file" id="importFile" accept=".json" onchange="importAllData(event)" style="display:none">
+<div style="font-size:10px;color:#888;margin:2px 0 8px;">
+Alle ruter og favoritter som JSON-fil. Bra til backup og deling av hele samlingen.
+</div>
+<div class="row">
+<button class="sec" onclick="exportRouteGPX()">🧭 Rute som GPX</button>
+<button class="sec" onclick="exportFavoritesGPX()">⭐ Favoritter som GPX</button>
+</div>
+<div style="font-size:10px;color:#888;margin-top:2px;">
+GPX kan importeres i kartplottere og andre navigasjonsapper.
+</div>
+<div id="shareStatus" style="font-size:11px;color:#2b8a3e;margin-top:6px;font-weight:bold;"></div>
 </div>
 
 <div class="card">
@@ -817,18 +854,15 @@ map.on('contextmenu', function(e){ addFavoriteAt(e.latlng.lat, e.latlng.lng); })
 
 // ===== WAYPOINT-HAANDTERING (alt i kartet) =====
 
-// Kobler alle event-handlere til en waypoint-markoer
 function attachWaypointHandlers(m){
   m.on('dragend', calculateRoute);
 
-  // Hoeyreklikk paa markoer = slett direkte
   m.on('contextmenu', function(ev){
     L.DomEvent.stopPropagation(ev);
     const i = waypoints.findIndex(function(w){ return w.marker === m; });
     if(i >= 0) deleteWaypoint(i);
   });
 
-  // Venstreklikk paa markoer = liten meny
   m.on('click', function(ev){
     L.DomEvent.stopPropagation(ev);
     const i = waypoints.findIndex(function(w){ return w.marker === m; });
@@ -839,7 +873,7 @@ function attachWaypointHandlers(m){
     if(i < waypoints.length - 1){
       html += '<button class="ok" onclick="insertWaypointAfter(' + i + ');map.closePopup();">\u2795 Sett inn nytt WP etter</button>';
     }
-    html += '<button class="warn" onclick="deleteWaypoint(' + i + ');map.closePopup();">\uD83D\uDDD1 Slett WP' + (i+1) + '</button>' +
+    html += '<button class="warn" onclick="deleteWaypoint(' + i + ');map.closePopup();">\uD83D\uDDD1\uFE0F Slett WP' + (i+1) + '</button>' +
       '<button class="sec" onclick="makeFavoriteFromWaypoint(' + i + ');map.closePopup();">\u2B50 Lagre som favoritt</button>' +
       '</div>';
     L.popup({closeButton:true, autoPan:true})
@@ -866,7 +900,6 @@ function renumberWaypoints(){
   });
 }
 
-// Setter inn nytt waypoint midt mellom to eksisterende
 function insertWaypointAfter(index){
   if(index < 0 || index >= waypoints.length - 1) return;
   const a = waypoints[index].marker.getLatLng();
@@ -874,7 +907,6 @@ function insertWaypointAfter(index){
   insertWaypointAt(index, (a.lat + b.lat) / 2, (a.lng + b.lng) / 2);
 }
 
-// Setter inn nytt waypoint paa en eksakt posisjon etter gitt indeks
 function insertWaypointAt(afterIndex, lat, lon){
   const m = L.marker([lat, lon], {draggable:true}).addTo(map);
   attachWaypointHandlers(m);
@@ -1401,7 +1433,6 @@ async function calculateRoute(){
 
     const pts = waypoints.map(function(w){ return [w.marker.getLatLng().lat, w.marker.getLatLng().lng]; });
 
-    // Tegn hovedsegmenter med fargekoding. Etiketter legges til senere med tid.
     const routeSegments = [];
     const segColors = [];
     for(let r = 0; r < pts.length - 1; r++){
@@ -1414,7 +1445,6 @@ async function calculateRoute(){
         color: segColor, weight: segWeight, opacity: 0.8, className: 'route-seg'
       }).addTo(map);
 
-      // Klikk pa rutelinjen setter inn nytt waypoint akkurat der
       (function(segIdx){
         segLine.on('click', function(ev){
           L.DomEvent.stopPropagation(ev);
@@ -1535,17 +1565,16 @@ async function calculateRoute(){
       const avgSailSpeed = etappeSubCount ? etappeSailSpeedSum/etappeSubCount : 0;
       const avgSog = etappeH > 0 ? etappeNM/etappeH : 0;
 
-      // ETIKETT PAA KARTET: NM + tid med valgt fremdrift
       const sailPctNum = etappeNM > 0 ? (etappeSailNM/etappeNM)*100 : 0;
       let modeIcon;
       if(isMotorMode){
-        modeIcon = '\uD83D\uDEA4';                                  // motorbaat
+        modeIcon = '\uD83D\uDEA4';
       } else if(etappeMotorNM < 0.01){
-        modeIcon = '\u26F5';                                        // 100% seil
+        modeIcon = '\u26F5';
       } else if(etappeSailNM < 0.01){
-        modeIcon = '\uD83D\uDEA4';                                  // 100% motor
+        modeIcon = '\uD83D\uDEA4';
       } else {
-        modeIcon = '\u26F5\uD83D\uDEA4';                            // blandet
+        modeIcon = '\u26F5\uD83D\uDEA4';
       }
       const labLa = (pts[i][0] + pts[i+1][0]) / 2;
       const labLo = (pts[i][1] + pts[i+1][1]) / 2;
@@ -2045,6 +2074,7 @@ function loadRoute(name){
   if(r.minSailSpeed !== undefined) document.getElementById('minSailSpeed').value = r.minSailSpeed;
   if(r.maxSegmentNM !== undefined) document.getElementById('maxSegmentNM').value = r.maxSegmentNM;
   if(r.departureTime) document.getElementById('departureTime').value = r.departureTime;
+  document.getElementById('routeName').value = name;
   const grp = L.featureGroup(waypoints.map(function(w){ return w.marker; }));
   map.fitBounds(grp.getBounds().pad(0.2));
 }
@@ -2066,6 +2096,7 @@ function renderRouteList(){
     const r = routes[k], dt = new Date(r.saved).toLocaleDateString();
     return '<div><span><b>'+k+'</b> <small style="color:#888">('+r.waypoints.length+' wp, '+dt+')</small></span>'+
       '<span><button class="ok" onclick="loadRoute(\''+k+'\')">Last</button>'+
+      '<button class="sec" onclick="shareSavedRoute(\''+k+'\')" title="Kopier delingslenke">\uD83D\uDD17</button>'+
       '<button class="warn" onclick="deleteRoute(\''+k+'\')">Slett</button></span></div>';
   }).join("");
 }
@@ -2179,6 +2210,216 @@ function renderFavorites(){
       }).join("");
     }
   }
+}
+
+// ===== DELING OG SIKKERHETSKOPI =====
+
+function b64encode(str){
+  return btoa(unescape(encodeURIComponent(str)));
+}
+function b64decode(str){
+  return decodeURIComponent(escape(atob(str)));
+}
+
+function byggDelingsLenke(navn, pts, motor, minSail, maxSeg){
+  const payload = {
+    n: navn,
+    p: pts,
+    m: motor,
+    s: minSail,
+    x: maxSeg
+  };
+  return location.origin + location.pathname + "#r=" + b64encode(JSON.stringify(payload));
+}
+
+function kopierLenke(url, beskrivelse){
+  if(url.length > 8000){
+    alert("Ruta har for mange waypoints for en lenke. Bruk Eksporter alt i stedet.");
+    return;
+  }
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(url).then(function(){
+      setEl('shareStatus', beskrivelse + " kopiert! (" + url.length + " tegn) Lim inn hvor du vil.");
+      setTimeout(function(){ setEl('shareStatus', ""); }, 6000);
+    }).catch(function(){ prompt("Kopier denne lenken:", url); });
+  } else {
+    prompt("Kopier denne lenken og send den til hvem du vil:", url);
+  }
+}
+
+// Del ruta som ligger i kartet naa
+function shareCurrentRoute(){
+  if(waypoints.length < 2){ alert("Trenger minst 2 waypoints for a dele en rute."); return; }
+  const pts = waypoints.map(function(w){
+    const ll = w.marker.getLatLng();
+    return [Math.round(ll.lat*100000)/100000, Math.round(ll.lng*100000)/100000];
+  });
+  const navn = (document.getElementById('routeName').value.trim()) || "Delt rute";
+  const url = byggDelingsLenke(
+    navn, pts,
+    document.getElementById('motorSpeed').value,
+    document.getElementById('minSailSpeed').value,
+    document.getElementById('maxSegmentNM').value
+  );
+  kopierLenke(url, "Lenke");
+}
+
+// Del en lagret rute direkte fra lista
+function shareSavedRoute(name){
+  const routes = getRoutes();
+  const r = routes[name];
+  if(!r){ alert("Fant ikke ruta."); return; }
+  const pts = r.waypoints.map(function(p){
+    return [Math.round(p[0]*100000)/100000, Math.round(p[1]*100000)/100000];
+  });
+  const url = byggDelingsLenke(name, pts, r.motorSpeed, r.minSailSpeed, r.maxSegmentNM);
+  kopierLenke(url, 'Lenke til "'+name+'"');
+}
+
+// Les inn rute fra lenke ved oppstart
+function loadRouteFromHash(){
+  const h = location.hash;
+  if(!h || h.indexOf('#r=') !== 0) return false;
+  try {
+    const data = JSON.parse(b64decode(h.substring(3)));
+    if(!data.p || !data.p.length) return false;
+
+    clearRoute();
+    data.p.forEach(function(p){ addWaypoint(p[0], p[1]); });
+    if(data.m !== undefined && data.m !== null) document.getElementById('motorSpeed').value = data.m;
+    if(data.s !== undefined && data.s !== null) document.getElementById('minSailSpeed').value = data.s;
+    if(data.x !== undefined && data.x !== null) document.getElementById('maxSegmentNM').value = data.x;
+    if(data.n) document.getElementById('routeName').value = data.n;
+
+    const grp = L.featureGroup(waypoints.map(function(w){ return w.marker; }));
+    map.fitBounds(grp.getBounds().pad(0.2));
+
+    setEl('shareStatus', 'Lastet delt rute: "' + (data.n||"uten navn") + '". Klikk Lagre for a beholde den.');
+    history.replaceState(null, "", location.pathname);
+    return true;
+  } catch(e){
+    console.warn("Kunne ikke lese delt rute:", e);
+    return false;
+  }
+}
+
+// Eksporter alle ruter og favoritter til fil
+function exportAllData(){
+  const data = {
+    app: "SetSail",
+    version: 1,
+    exported: new Date().toISOString(),
+    routes: getRoutes(),
+    favorites: getFavorites()
+  };
+  const antR = Object.keys(data.routes).length;
+  const antF = data.favorites.length;
+  if(antR === 0 && antF === 0){ alert("Ingenting a eksportere enna."); return; }
+
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type: "application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "setsail-data-" + new Date().toISOString().slice(0,10) + ".json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+  setEl('shareStatus', "Eksportert " + antR + " ruter og " + antF + " favoritter.");
+  setTimeout(function(){ setEl('shareStatus', ""); }, 6000);
+}
+
+// Importer fra fil
+function importAllData(ev){
+  const f = ev.target.files[0];
+  if(!f) return;
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try {
+      const data = JSON.parse(e.target.result);
+      if(!data.routes && !data.favorites){ alert("Filen inneholder ingen SetSail-data."); return; }
+
+      const antR = data.routes ? Object.keys(data.routes).length : 0;
+      const antF = data.favorites ? data.favorites.length : 0;
+      const slaSammen = confirm(
+        "Fant " + antR + " ruter og " + antF + " favoritter.\n\n" +
+        "OK = Legg til i tillegg til det du har\n" +
+        "Avbryt = Erstatt alt du har fra for"
+      );
+
+      if(data.routes){
+        const eksisterende = slaSammen ? getRoutes() : {};
+        Object.keys(data.routes).forEach(function(k){
+          let navn = k;
+          if(slaSammen && eksisterende[k]) navn = k + " (importert)";
+          eksisterende[navn] = data.routes[k];
+        });
+        setRoutes(eksisterende);
+      }
+
+      if(data.favorites){
+        const eksisterende = slaSammen ? getFavorites() : [];
+        data.favorites.forEach(function(fav){
+          const finnes = eksisterende.some(function(x){
+            return x.name === fav.name &&
+                   Math.abs(x.lat - fav.lat) < 0.0001 &&
+                   Math.abs(x.lon - fav.lon) < 0.0001;
+          });
+          if(!finnes) eksisterende.push(fav);
+        });
+        setFavorites(eksisterende);
+      }
+
+      renderRouteList();
+      renderFavorites();
+      setEl('shareStatus', "Import fullfort: " + antR + " ruter, " + antF + " favoritter.");
+      setTimeout(function(){ setEl('shareStatus', ""); }, 6000);
+    } catch(err){
+      alert("Kunne ikke lese filen: " + err.message);
+    }
+  };
+  reader.readAsText(f);
+  ev.target.value = "";
+}
+
+function lastNedGPX(innhold, filnavn){
+  const blob = new Blob([innhold], {type: "application/gpx+xml"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filnavn;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// GPX-eksport av gjeldende rute
+function exportRouteGPX(){
+  if(waypoints.length < 2){ alert("Trenger minst 2 waypoints."); return; }
+  const navn = (document.getElementById('routeName').value.trim()) || "SetSail rute";
+  let gpx = '<?xml version="1.0" encoding="UTF-8"?>\n';
+  gpx += '<gpx version="1.1" creator="Set Sail" xmlns="http://www.topografix.com/GPX/1/1">\n';
+  gpx += "<rte><name>" + navn + "</name>\n";
+  waypoints.forEach(function(w, i){
+    const ll = w.marker.getLatLng();
+    gpx += '<rtept lat="' + ll.lat.toFixed(6) + '" lon="' + ll.lng.toFixed(6) + '">' +
+           "<name>WP" + (i+1) + "</name></rtept>\n";
+  });
+  gpx += "</rte></gpx>";
+  lastNedGPX(gpx, "setsail-rute-" + new Date().toISOString().slice(0,10) + ".gpx");
+  setEl('shareStatus', "Rute eksportert som GPX (" + waypoints.length + " punkter).");
+  setTimeout(function(){ setEl('shareStatus', ""); }, 6000);
+}
+
+// GPX-eksport av favoritter
+function exportFavoritesGPX(){
+  const favs = getFavorites();
+  if(!favs.length){ alert("Ingen favoritter a eksportere."); return; }
+  let gpx = '<?xml version="1.0" encoding="UTF-8"?>\n';
+  gpx += '<gpx version="1.1" creator="Set Sail" xmlns="http://www.topografix.com/GPX/1/1">\n';
+  favs.forEach(function(f){
+    gpx += '<wpt lat="' + f.lat.toFixed(6) + '" lon="' + f.lon.toFixed(6) + '">' +
+           "<name>" + f.name + "</name><sym>Anchor</sym></wpt>\n";
+  });
+  gpx += "</gpx>";
+  lastNedGPX(gpx, "setsail-favoritter-" + new Date().toISOString().slice(0,10) + ".gpx");
+  setEl('shareStatus', "Eksporterte " + favs.length + " favoritter som GPX.");
+  setTimeout(function(){ setEl('shareStatus', ""); }, 6000);
 }
 
 // ===== LIVE GPS-SPORING =====
@@ -2348,13 +2589,7 @@ function exportTrackGPX(){
            "<time>" + new Date(p.t).toISOString() + "</time></trkpt>\n";
   });
   gpx += "</trkseg></trk></gpx>";
-
-  const blob = new Blob([gpx], {type: "application/gpx+xml"});
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "setsail-spor-" + new Date().toISOString().slice(0,10) + ".gpx";
-  a.click();
-  URL.revokeObjectURL(a.href);
+  lastNedGPX(gpx, "setsail-spor-" + new Date().toISOString().slice(0,10) + ".gpx");
 }
 
 // ===== INITIALISERING =====
@@ -2370,6 +2605,7 @@ if(vmgCheckbox){
 drawPolar();
 renderRouteList();
 renderFavorites();
+loadRouteFromHash();
 </script>
 </body>
 </html>
