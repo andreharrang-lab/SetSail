@@ -6,6 +6,7 @@ Update 04.08.2026:
 * Possible to see nm and time between two waypoints
 * Possible to add favourite places on the map and store for later use
 * Possible to add new waypoints between two already existing waypoints
+* Live GPS tracking on top of your route
 
 
 ## ✨ Features
