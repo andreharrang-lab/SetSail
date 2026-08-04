@@ -117,6 +117,22 @@ body.sidebar-hidden #map{width:100%}
   height:6px;background:#e9ecef;border-radius:3px;overflow:hidden;margin-top:5px;display:none;
 }
 .auto-progress span{display:block;height:100%;background:#2b8a3e;width:0%;transition:width .2s}
+
+/* HOYDE OG DYBDE - HINDERMARKORER */
+.hazard-pin{
+  width:28px;height:28px;display:flex;align-items:center;justify-content:center;
+  font-size:15px;border-radius:50%;border:2px solid white;
+  box-shadow:0 2px 6px rgba(0,0,0,.45);
+}
+.hz-ok{background:#2b8a3e;color:#fff}
+.hz-warn{background:#fd7e14;color:#fff}
+.hz-bad{background:#c92a2a;color:#fff}
+.hz-unknown{background:#6c757d;color:#fff}
+#clearanceBox{font-size:11px;max-height:220px;overflow-y:auto;margin-top:5px}
+#clearanceBox .hz-row{padding:5px;border-bottom:1px solid #eee;cursor:pointer}
+#clearanceBox .hz-row:hover{background:#f0f4f7}
+#clearanceStatus{font-size:11px;color:#555;margin-top:4px;min-height:14px}
+.hz-legend{font-size:10px;color:#888;margin-top:5px;line-height:1.6}
 </style>
 </head>
 <body>
@@ -130,9 +146,25 @@ body.sidebar-hidden #map{width:100%}
     <ol style="line-height:1.8">
       <li><b>Klikk i kartet</b> for å sette waypoints (minst 2)</li>
       <li><b>Velg båt</b> i polar-seksjonen (eller last ORC-database)</li>
-      <li><b>Sett avgangstidspunkt</b> og motorfart</li>
+      <li><b>Sett avgangstidspunkt</b>, motorfart, mastehøyde og dypgang</li>
       <li><b>Klikk Beregn</b> - få full analyse</li>
     </ol>
+    <h3 style="color:#0b3d66">🌉 Mastehøyde og dypgang</h3>
+    <p>Fyll inn båtens mastehøyde over vannlinjen og dypgang i seksjonen
+    Reisetidspunkt og fart. Klikk deretter <b>Sjekk bruer og kraftlinjer</b>.</p>
+    <ul style="line-height:1.8">
+      <li><b>Mastehøyde</b>: Sammenlignes med seilbar høyde på broer og luftspenn langs ruta</li>
+      <li><b>Dypgang</b>: Ved 1,0 m eller mer unngår ruteberegningen grunne områder på sjøkartet</li>
+      <li><b>Sikkerhetsmargin</b>: Legges til mastehøyden. 1 m er et fornuftig utgangspunkt</li>
+    </ul>
+    <p style="background:#ffe3e3;padding:8px;border-radius:4px;border-left:4px solid #c92a2a;">
+      <b>⚠ Kritisk forbehold om høydedata:</b> Kartverkets sjøkart viser seilbare høyder
+      som tekst, og kan ikke leses automatisk. Appen henter derfor høydedata fra
+      <b>OpenStreetMap/OpenSeaMap</b>, som er dugnadsdata. Mange broer mangler høyde,
+      og oppgitte verdier kan være feil eller utdaterte. Noen høyder gjelder ved
+      <b>høyvann</b>, andre ved middelvann.<br><br>
+      <b>Kontroller alltid mot offisielt sjøkart og skilting på stedet før du passerer.</b>
+    </p>
     <h3 style="color:#0b3d66">🧭 Automatisk ruteplanlegger</h3>
     <p>Velg et startpunkt og et sluttpunkt, så finner appen selv en farbar rute mellom dem.
     Algoritmen bruker Kartverkets sjøkart til å unngå land og grunner, og vekter hvert
@@ -142,13 +174,10 @@ body.sidebar-hidden #map{width:100%}
       <li><b>Oppløsning</b>: Finere rutenett gir bedre rute, men tar lengre tid</li>
       <li><b>Klaring</b>: Minste avstand ruta skal holde til land og grunner</li>
     </ul>
-    <p>Resultatet blir en ferdig rute med waypoints du kan dra på, slette eller supplere
-    på vanlig måte. Kjøres i seilbåt-modus vektes ruta etter polarfart, i motorbåt-modus
-    etter marsjfart.</p>
     <h3 style="color:#0b3d66">📍 Waypoints - alt gjøres i kartet</h3>
     <ul style="line-height:1.8">
       <li><b>Klikk i kartet</b> for å legge til waypoint på slutten av ruta</li>
-      <li><b>Klikk på rutelinjen</b> mellom to waypoints for å sette inn et nytt punkt akkurat der</li>
+      <li><b>Klikk på rutelinjen</b> mellom to waypoints for å sette inn et nytt punkt der</li>
       <li><b>Dra en markør</b> for å flytte den</li>
       <li><b>Klikk på en markør</b> for meny med slett / sett inn etter</li>
       <li><b>Høyreklikk på en markør</b> for å slette den direkte</li>
@@ -179,6 +208,7 @@ body.sidebar-hidden #map{width:100%}
     <h3 style="color:#0b3d66;background:#fff3cd;padding:8px;border-radius:4px;border-left:4px solid #c92a2a;">⚠ Viktige forbehold</h3>
     <ul style="line-height:1.8">
       <li>🚤 <b>Ikke en erstatning for offisielle sjøkart eller GPS</b></li>
+      <li>🌉 Høydedata er dugnadsdata og kan mangle eller være feil</li>
       <li>🧭 Automatisk rute er et forslag - kontroller alltid mot sjøkart</li>
       <li>📊 Polardata er estimat - bruk ORC-sertifikat for nøyaktighet</li>
       <li>🌬 Vind- og strømdata kan være forsinket eller mangle</li>
@@ -190,6 +220,7 @@ body.sidebar-hidden #map{width:100%}
     <h3 style="color:#0b3d66">📡 Datakilder</h3>
     <ul style="line-height:1.8">
       <li><b>Sjøkart</b>: Kartverket (kartverket.no)</li>
+      <li><b>Broer og luftspenn</b>: OpenStreetMap via Overpass API</li>
       <li><b>Vind/Strøm/Bølger</b>: Open-Meteo (open-meteo.com)</li>
       <li><b>Tidevann</b>: Kartverket Sehavniva</li>
       <li><b>Polar-database</b>: ORC (data.orc.org)</li>
@@ -273,12 +304,33 @@ Klikk på en <b>markør</b> for meny. Høyreklikk på markør sletter.<br>
 <div class="row"><label>Motorfart kn</label><input type="number" id="motorSpeed" placeholder="Blank = kun seil" step="0.1" min="0"></div>
 <div class="row hide-in-motor-mode"><label>Min seilfart kn</label><input type="number" id="minSailSpeed" placeholder="0 = ingen min" step="0.1" min="0" value="4"></div>
 <div class="row"><label>Maks segment NM</label><input type="number" id="maxSegmentNM" value="2" step="0.5" min="0.5"></div>
+<div style="border-top:1px solid #eee;margin:8px 0 6px;padding-top:7px;">
+<div style="font-size:11px;color:#0b3d66;font-weight:bold;margin-bottom:5px;">🌉 Båtens mål</div>
+<div class="row"><label>Mastehøyde m</label><input type="number" id="mastHeight" placeholder="0 = ikke sjekk" step="0.1" min="0" value="0"></div>
+<div class="row"><label>Dypgang m</label><input type="number" id="draft" placeholder="0 = ikke sjekk" step="0.1" min="0" value="1.8"></div>
+<div class="row"><label>Sikkerhetsmargin m</label><input type="number" id="clearanceMargin" value="1" step="0.5" min="0"></div>
+<div style="font-size:10px;color:#888">Mastehøyde over vannlinjen. Dypgang ≥ 1,0 m gjør at ruta unngår grunner.</div>
+</div>
 <div style="font-size:11px;color:#555" class="hide-in-motor-mode">Motor starter automatisk hvis seilfart under min.</div>
 <div style="font-size:11px;color:#555;display:none" id="motorModeInfo">Reisetid beregnes med motorfart. Vind/bølger vises for komfort.</div>
 <div class="row hide-in-motor-mode" style="margin-top:6px;">
 <label style="flex:1;font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer;">
 <input type="checkbox" id="showVmgPaths" checked style="width:auto;margin:0;"> Vis VMG-baner (slag/jibe) på kartet
 </label>
+</div>
+</div>
+
+<div class="card">
+<h2>🌉 Høyde og dybde langs ruta</h2>
+<div class="row">
+<button class="ok" onclick="checkClearances()" id="clearanceBtn">🔍 Sjekk bruer og kraftlinjer</button>
+<button class="sec" onclick="clearHazards()">🗑 Tøm</button>
+</div>
+<div id="clearanceStatus">Sett mastehøyde og en rute, klikk Sjekk.</div>
+<div id="clearanceBox"></div>
+<div class="hz-legend">
+🟢 God klaring &nbsp; 🟠 Knapp klaring &nbsp; 🔴 For lavt &nbsp; ⚪ Høyde ukjent<br>
+Data fra OpenStreetMap. <b>Kontroller alltid mot sjøkart og skilting.</b>
 </div>
 </div>
 
@@ -324,6 +376,7 @@ Klikk på en <b>markør</b> for meny. Høyreklikk på markør sletter.<br>
 <div class="stat"><div class="val" id="avgWind">-</div><div class="lbl">Snitt vind</div></div>
 <div class="stat"><div class="val" id="avgSpeed">-</div><div class="lbl">Snitt SOG</div></div>
 <div class="stat"><div class="val" id="maxWave">-</div><div class="lbl">Maks bølge</div></div>
+<div class="stat"><div class="val" id="minClearance">-</div><div class="lbl">Laveste klaring</div></div>
 </div>
 <div id="currentEffect" class="current-effect current-neutral">Klikk Beregn for strom-effekt</div>
 <div id="etaInfo" style="font-size:11px;color:#0b3d66;margin-top:6px;text-align:center;font-weight:bold;"></div>
@@ -440,6 +493,12 @@ function setHtml(id, html){
   const el = document.getElementById(id);
   if(el) el.innerHTML = html;
 }
+function numVal(id, fallback){
+  const el = document.getElementById(id);
+  if(!el) return fallback;
+  const v = parseFloat(el.value);
+  return isNaN(v) ? fallback : v;
+}
 
 let calculatingRoute = false;
 let bulkAdd = false;
@@ -507,6 +566,18 @@ window.addEventListener('load', function(){
   const savedMode = localStorage.getItem('seilrute_mode') || 'sail';
   if(savedMode === 'motor') switchMode('motor');
   if(localStorage.getItem('sidebar_hidden') === 'true') toggleSidebar();
+
+  const savedMast = localStorage.getItem('setsail_mast');
+  const savedDraft = localStorage.getItem('setsail_draft');
+  if(savedMast !== null) document.getElementById('mastHeight').value = savedMast;
+  if(savedDraft !== null) document.getElementById('draft').value = savedDraft;
+
+  ['mastHeight','draft'].forEach(function(id){
+    const el = document.getElementById(id);
+    if(el) el.addEventListener('change', function(){
+      localStorage.setItem(id === 'mastHeight' ? 'setsail_mast' : 'setsail_draft', el.value);
+    });
+  });
 
   const modal = document.getElementById('helpModal');
   if(modal){
@@ -876,7 +947,6 @@ L.control.layers({
   "OpenStreetMap": osm, "CartoDB": carto
 }, { "OpenSeaMap (sjomerker)": openseamap }, {position:'topright', collapsed:true}).addTo(map);
 
-// Flagg som hindrer at klikk paa rutelinje ogsaa legger til waypoint paa slutten
 let suppressMapClick = false;
 
 map.on('click', function(e){
@@ -976,8 +1046,9 @@ function clearRoute(){
     routeLine = null;
   }
   vmgLines.forEach(function(l){ map.removeLayer(l); }); vmgLines = [];
+  if(typeof clearHazards === 'function') clearHazards();
   setHtml('segments', "Klikk i kartet for waypoints.");
-  ["totalNM","totalTime","totalTimeNoCurrent","currentDiff","avgWind","avgSpeed","maxWave"].forEach(function(id){
+  ["totalNM","totalTime","totalTimeNoCurrent","currentDiff","avgWind","avgSpeed","maxWave","minClearance"].forEach(function(id){
     setEl(id, id === "totalNM" ? "0.00" : "-");
   });
   setEl('etaInfo', "");
@@ -1015,6 +1086,19 @@ function fmtT(h){
   if(!h || !isFinite(h)) return "--:--";
   const t = Math.round(Math.abs(h)*3600), hh = Math.floor(t/3600), mm = Math.floor((t%3600)/60);
   return String(hh).padStart(2,'0')+":"+String(mm).padStart(2,'0');
+}
+
+// Skjaeringspunkt mellom to linjestykker i lat/lon-plan.
+// Returnerer [lat, lon] eller null. Brukes til aa finne hvor ruta krysser broer.
+function segIntersect(a1, a2, b1, b2){
+  const x1 = a1[1], y1 = a1[0], x2 = a2[1], y2 = a2[0];
+  const x3 = b1[1], y3 = b1[0], x4 = b2[1], y4 = b2[0];
+  const den = (y4-y3)*(x2-x1) - (x4-x3)*(y2-y1);
+  if(Math.abs(den) < 1e-14) return null;
+  const ua = ((x4-x3)*(y1-y3) - (y4-y3)*(x1-x3)) / den;
+  const ub = ((x2-x1)*(y1-y3) - (y2-y1)*(x1-x3)) / den;
+  if(ua < 0 || ua > 1 || ub < 0 || ub > 1) return null;
+  return [y1 + ua*(y2-y1), x1 + ua*(x2-x1)];
 }
 
 // ===== API-WRAPPERE =====
@@ -1139,8 +1223,13 @@ function classifyKartverketPixel(r, g, b){
   return 'unknown';
 }
 
-// Tile-cache: lagrer dekodede piksler slik at hver flis kun hentes en gang.
-// Dette er avgjorende for at ruteplanleggeren skal ga raskt.
+// Dypgang bestemmer om grunne omrader skal unngas.
+// Under 1,0 m regnes baten som grunn nok til a passere merkede grunner.
+function draftBlocksShallow(){
+  return numVal('draft', 1.8) >= 1.0;
+}
+
+// Tile-cache: hver sjokart-flis hentes og dekodes bare en gang
 const tilePixelCache = new Map();
 const TILE_CACHE_MAX = 260;
 
@@ -1175,7 +1264,7 @@ function getTilePixels(zoom, xtile, ytile){
   return p;
 }
 
-async function isLandKartverket(lat, lon){
+async function isLandKartverket(lat, lon, blockShallow){
   const zoom = 14;
   const n = Math.pow(2, zoom);
   const xf = (lon + 180) / 360 * n;
@@ -1199,17 +1288,18 @@ async function isLandKartverket(lat, lon){
     counts[klass]++;
   }
 
-  const avoidCount = counts.land + counts.tidal + counts.shallow;
-  const safeCount = counts.sea_deep + counts.medium_sea;
+  const avoidCount = counts.land + counts.tidal + (blockShallow ? counts.shallow : 0);
+  const safeCount = counts.sea_deep + counts.medium_sea + (blockShallow ? 0 : counts.shallow);
   return avoidCount >= 2 || (avoidCount > safeCount && counts.unknown < 4);
 }
 
 async function isLand(lat, lon){
-  const key = Math.round(lat*1000)/1000 + "," + Math.round(lon*1000)/1000;
+  const blockShallow = draftBlocksShallow();
+  const key = Math.round(lat*1000)/1000 + "," + Math.round(lon*1000)/1000 + "," + (blockShallow ? 'D' : 'S');
   if(landCache.has(key)) return landCache.get(key);
 
   try {
-    const result = await isLandKartverket(lat, lon);
+    const result = await isLandKartverket(lat, lon, blockShallow);
     if(result !== null){ landCache.set(key, result); return result; }
   } catch(e){}
 
@@ -1227,6 +1317,30 @@ async function isLand(lat, lon){
     landCache.set(key, false);
     return false;
   }
+}
+
+// Teller hvor mange punkter langs ruta som ligger i grunt farvann
+async function countShallowAlong(la1, lo1, la2, lo2){
+  const distNM = haversineNM(la1, lo1, la2, lo2);
+  const numSamples = Math.max(4, Math.ceil(distNM / 0.5));
+  let n = 0;
+  for(let s = 1; s < numSamples; s++){
+    const t = s / numSamples;
+    const cLa = la1 + (la2 - la1) * t;
+    const cLo = lo1 + (lo2 - lo1) * t;
+    const zoom = 14, nn = Math.pow(2, zoom);
+    const xf = (cLo + 180) / 360 * nn;
+    const yf = (1 - Math.log(Math.tan(cLa*Math.PI/180) + 1/Math.cos(cLa*Math.PI/180))/Math.PI) / 2 * nn;
+    const xtile = Math.floor(xf), ytile = Math.floor(yf);
+    const data = await getTilePixels(zoom, xtile, ytile);
+    if(!data) continue;
+    const px = Math.floor((xf - xtile) * 256), py = Math.floor((yf - ytile) * 256);
+    if(px < 0 || px >= 256 || py < 0 || py >= 256) continue;
+    const idx = (py*256 + px) * 4;
+    const klass = classifyKartverketPixel(data[idx], data[idx+1], data[idx+2]);
+    if(klass === 'shallow' || klass === 'tidal') n++;
+  }
+  return n;
 }
 
 async function checkWaypointsOnLand(){
@@ -1273,7 +1387,6 @@ async function lineCrossesLand(la1, lo1, la2, lo2){
   return false;
 }
 
-// Som lineCrossesLand, men med valgfri sikkerhetsmargin i meter
 async function lineClearWithMargin(la1, lo1, la2, lo2, marginM){
   const distNM = haversineNM(la1, lo1, la2, lo2);
   const numSamples = Math.max(4, Math.ceil(distNM / 0.3));
@@ -1499,13 +1612,14 @@ async function calculateRoute(){
       }
     }
 
+    const draftVal = numVal('draft', 0);
     if(landWarnings.length || segmentWarnings.length){
       let warnHtml = '<div style="background:#ffe3e3;color:#c92a2a;padding:6px;border-radius:4px;margin-bottom:6px;">';
       if(landWarnings.length){
-        warnHtml += '<b>ADVARSEL:</b> Waypoint(s) '+landWarnings.join(', ')+' ligger pa land/grunne!<br>';
+        warnHtml += '<b>ADVARSEL:</b> Waypoint(s) '+landWarnings.join(', ')+' ligger pa land'+(draftBlocksShallow()?'/grunne':'')+'!<br>';
       }
       if(segmentWarnings.length){
-        warnHtml += '<b>ADVARSEL:</b> Linje '+segmentWarnings.join(', ')+' krysser land/grunne!<br>';
+        warnHtml += '<b>ADVARSEL:</b> Linje '+segmentWarnings.join(', ')+' krysser land'+(draftBlocksShallow()?'/grunne':'')+'!<br>';
         warnHtml += '<small>Klikk pa rutelinjen for a sette inn mellom-waypoint, eller bruk automatisk ruteplanlegger.</small>';
       }
       warnHtml += '</div>';
@@ -1535,7 +1649,7 @@ async function calculateRoute(){
       })(r);
 
       const tipBase = crossesLand
-        ? 'ADVARSEL: Linja WP'+(r+1)+' til WP'+(r+2)+' krysser land/grunne!<br>'
+        ? 'ADVARSEL: Linja WP'+(r+1)+' til WP'+(r+2)+' krysser land eller grunne!<br>'
         : '';
       segLine.bindTooltip(tipBase + 'Klikk for a sette inn nytt waypoint her', {sticky: true});
       if(crossesLand) console.warn("WP"+(r+1)+"-WP"+(r+2)+" krysser land/grunne!");
@@ -1554,10 +1668,10 @@ async function calculateRoute(){
     const motorSpd = motorRaw === "" ? 0 : parseFloat(motorRaw) || 0;
     const minSailRaw = document.getElementById('minSailSpeed').value.trim();
     const minSailSpd = minSailRaw === "" ? 0 : parseFloat(minSailRaw) || 0;
-    const maxSegmentNM = parseFloat(document.getElementById('maxSegmentNM').value) || 2;
+    const maxSegmentNM = numVal('maxSegmentNM', 2);
     const sailOnlyMode = motorSpd <= 0;
     const isMotorMode = document.body.classList.contains('motor-mode');
-    console.log("BEREGN: motor="+motorSpd+"kn, minSeil="+minSailSpd+"kn, maxSeg="+maxSegmentNM+"NM");
+    console.log("BEREGN: motor="+motorSpd+"kn, minSeil="+minSailSpd+"kn, maxSeg="+maxSegmentNM+"NM, dypgang="+draftVal+"m");
 
     const depInput = document.getElementById('departureTime').value;
     const departure = depInput ? new Date(depInput) : new Date();
@@ -1756,8 +1870,19 @@ async function calculateRoute(){
       else if(avgTwa < 150) twaLabel = ' (rom skjots)';
       else twaLabel = ' (lens)';
 
-      const minSailVal = parseFloat(document.getElementById('minSailSpeed').value)||0;
+      const minSailVal = numVal('minSailSpeed', 0);
       const sailSpeedColor = avgSailSpeed >= minSailVal ? '#2b8a3e' : '#c92a2a';
+
+      // Grunne omrader langs etappen naar dypgang er oppgitt
+      let shallowNote = '';
+      if(draftVal > 0){
+        const nShallow = await countShallowAlong(la1, lo1, la2, lo2);
+        if(nShallow > 0){
+          shallowNote = '<div style="background:#fff3cd;padding:4px;border-radius:3px;margin:4px 0;font-size:11px;">' +
+            '\u26A0 <b>Grunt farvann:</b> ' + nShallow + ' punkt' + (nShallow>1?'er':'') +
+            ' langs etappen er merket grunt/tidevann pa sjokartet. Dypgang ' + draftVal.toFixed(1) + ' m - kontroller dybder.</div>';
+        }
+      }
 
       seg.innerHTML += '<div><b>WP'+(i+1)+' til WP'+(i+2)+'</b> ('+(subPts.length-1)+' delsegmenter)<br>'+
         tFmt(segStart)+' til '+tFmt(currentTime)+'<br>'+
@@ -1767,6 +1892,7 @@ async function calculateRoute(){
           'TWA: <b>'+avgTwa.toFixed(0)+' grader</b>'+twaLabel+' | Polar-fart: <b style="color:'+sailSpeedColor+'">'+avgSailSpeed.toFixed(1)+' kn</b><br>'
         )+
         'Distanse: '+etappeNM.toFixed(2)+' NM | Snittfart: <b>'+avgSog.toFixed(1)+' kn</b> | Maks bolge: '+waveStr+'<br>'+
+        shallowNote+
         (jibeAdvice ? '<div style="background:#fff3cd;padding:4px;border-radius:3px;margin:4px 0;font-size:11px;"><b>'+jibeAdvice.type+'-tips:</b> Seil i Z-monster med TWA '+jibeAdvice.bestTWA+' grader - <b style="color:#2b8a3e">sparer '+jibeAdvice.savedMin+' min ('+jibeAdvice.gainPct+'% raskere)</b><br>Direkte: '+jibeAdvice.directSpeed+' kn. Taktisk: '+jibeAdvice.optimalSpeed+' kn ('+jibeAdvice.extraDistancePct+'% lengre)</div>' : '')+
         modeStr+'<br>'+
         'Tid: '+fmtT(etappeH)+' (uten strom: '+fmtT(etappeHnoCur)+') '+currStr+'</div>';
@@ -1814,7 +1940,11 @@ async function calculateRoute(){
     const etaFmt = currentTime.toLocaleString('nb-NO',{weekday:'short',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
     const depFmt = departure.toLocaleString('nb-NO',{weekday:'short',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
     const modeLabel = sailOnlyMode ? 'KUN SEIL (ingen motor)' : 'Motor: '+motorSpd+' kn (min seil '+minSailSpd+' kn)';
-    setHtml('etaInfo', 'Avgang: '+depFmt+' -> ETA: '+etaFmt+'<br>'+modeLabel);
+    const mastVal = numVal('mastHeight', 0);
+    const boatLabel = (mastVal > 0 || draftVal > 0)
+      ? '<br>Mastehoyde '+(mastVal>0?mastVal.toFixed(1)+' m':'ikke satt')+' | Dypgang '+(draftVal>0?draftVal.toFixed(1)+' m':'ikke satt')
+      : '';
+    setHtml('etaInfo', 'Avgang: '+depFmt+' -> ETA: '+etaFmt+'<br>'+modeLabel+boatLabel);
 
     if(typeof trackPoints !== 'undefined' && trackPoints.length){
       const last = trackPoints[trackPoints.length-1];
@@ -1864,8 +1994,8 @@ async function drawIsochrones(){
   const motorSpd = motorRaw === "" ? 0 : parseFloat(motorRaw) || 0;
   const minSailRaw = document.getElementById('minSailSpeed').value.trim();
   const minSailSpd = minSailRaw === "" ? 0 : parseFloat(minSailRaw) || 0;
-  const maxH = parseFloat(document.getElementById('isoMaxHours').value) || 6;
-  const dt = parseFloat(document.getElementById('isoStep').value) || 1;
+  const maxH = numVal('isoMaxHours', 6);
+  const dt = numVal('isoStep', 1);
   const steps = Math.ceil(maxH/dt);
   setEl('isoStatus', "Beregner...");
   let frontier = [[startLat, startLon]];
@@ -2023,7 +2153,7 @@ function clearWeatherWindow(){
 
 async function findWeatherWindow(){
   if(waypoints.length < 2){ alert("Trenger minst 2 waypoints."); return; }
-  const stepH = parseFloat(document.getElementById('wwStep').value) || 2;
+  const stepH = numVal('wwStep', 2);
   const depInput = document.getElementById('departureTime').value;
   const baseDate = depInput ? new Date(depInput) : new Date();
   const candidates = [];
@@ -2039,7 +2169,7 @@ async function findWeatherWindow(){
   const motorSpd = motorRaw === "" ? 0 : parseFloat(motorRaw) || 0;
   const minSailRaw = document.getElementById('minSailSpeed').value.trim();
   const minSailSpd = minSailRaw === "" ? 0 : parseFloat(minSailRaw) || 0;
-  const userMaxSeg = parseFloat(document.getElementById('maxSegmentNM').value) || 2;
+  const userMaxSeg = numVal('maxSegmentNM', 2);
   const maxSegmentNM = Math.max(userMaxSeg, 5);
   const pts = waypoints.map(function(w){ return [w.marker.getLatLng().lat, w.marker.getLatLng().lng]; });
 
@@ -2137,6 +2267,8 @@ function saveRoute(){
     motorSpeed: document.getElementById('motorSpeed').value,
     minSailSpeed: document.getElementById('minSailSpeed').value,
     maxSegmentNM: document.getElementById('maxSegmentNM').value,
+    mastHeight: document.getElementById('mastHeight').value,
+    draft: document.getElementById('draft').value,
     departureTime: document.getElementById('departureTime').value,
     saved: new Date().toISOString()
   };
@@ -2156,6 +2288,8 @@ function loadRoute(name){
   if(r.motorSpeed !== undefined) document.getElementById('motorSpeed').value = r.motorSpeed;
   if(r.minSailSpeed !== undefined) document.getElementById('minSailSpeed').value = r.minSailSpeed;
   if(r.maxSegmentNM !== undefined) document.getElementById('maxSegmentNM').value = r.maxSegmentNM;
+  if(r.mastHeight !== undefined) document.getElementById('mastHeight').value = r.mastHeight;
+  if(r.draft !== undefined) document.getElementById('draft').value = r.draft;
   if(r.departureTime) document.getElementById('departureTime').value = r.departureTime;
   document.getElementById('routeName').value = name;
   const grp = L.featureGroup(waypoints.map(function(w){ return w.marker; }));
@@ -2309,8 +2443,8 @@ function b64decode(str){
   return decodeURIComponent(escape(atob(str)));
 }
 
-function byggDelingsLenke(navn, pts, motor, minSail, maxSeg){
-  const payload = { n: navn, p: pts, m: motor, s: minSail, x: maxSeg };
+function byggDelingsLenke(navn, pts, motor, minSail, maxSeg, mast, draft){
+  const payload = { n: navn, p: pts, m: motor, s: minSail, x: maxSeg, h: mast, d: draft };
   return location.origin + location.pathname + "#r=" + b64encode(JSON.stringify(payload));
 }
 
@@ -2340,7 +2474,9 @@ function shareCurrentRoute(){
     navn, pts,
     document.getElementById('motorSpeed').value,
     document.getElementById('minSailSpeed').value,
-    document.getElementById('maxSegmentNM').value
+    document.getElementById('maxSegmentNM').value,
+    document.getElementById('mastHeight').value,
+    document.getElementById('draft').value
   );
   kopierLenke(url, "Lenke");
 }
@@ -2352,7 +2488,7 @@ function shareSavedRoute(name){
   const pts = r.waypoints.map(function(p){
     return [Math.round(p[0]*100000)/100000, Math.round(p[1]*100000)/100000];
   });
-  const url = byggDelingsLenke(name, pts, r.motorSpeed, r.minSailSpeed, r.maxSegmentNM);
+  const url = byggDelingsLenke(name, pts, r.motorSpeed, r.minSailSpeed, r.maxSegmentNM, r.mastHeight, r.draft);
   kopierLenke(url, 'Lenke til "'+name+'"');
 }
 
@@ -2371,6 +2507,8 @@ function loadRouteFromHash(){
     if(data.m !== undefined && data.m !== null) document.getElementById('motorSpeed').value = data.m;
     if(data.s !== undefined && data.s !== null) document.getElementById('minSailSpeed').value = data.s;
     if(data.x !== undefined && data.x !== null) document.getElementById('maxSegmentNM').value = data.x;
+    if(data.h !== undefined && data.h !== null) document.getElementById('mastHeight').value = data.h;
+    if(data.d !== undefined && data.d !== null) document.getElementById('draft').value = data.d;
     if(data.n) document.getElementById('routeName').value = data.n;
 
     const grp = L.featureGroup(waypoints.map(function(w){ return w.marker; }));
@@ -2390,7 +2528,7 @@ function loadRouteFromHash(){
 function exportAllData(){
   const data = {
     app: "SetSail",
-    version: 1,
+    version: 2,
     exported: new Date().toISOString(),
     routes: getRoutes(),
     favorites: getFavorites()
@@ -2502,6 +2640,251 @@ function exportFavoritesGPX(){
   setTimeout(function(){ setEl('shareStatus', ""); }, 6000);
 }
 
+// ===== HOYDE OG DYBDE: BROER OG LUFTSPENN =====
+// Kartverkets sjokart viser seilbar hoyde som TEKST og kan ikke leses automatisk.
+// Vi bruker derfor OpenStreetMap via Overpass API, som har hoyder som strukturerte data.
+let hazardMarkers = [];
+let hazardList = [];
+
+function clearHazards(){
+  hazardMarkers.forEach(function(m){ map.removeLayer(m); });
+  hazardMarkers = [];
+  hazardList = [];
+  setHtml('clearanceBox', '');
+  setEl('clearanceStatus', 'Sett mastehoyde og en rute, klikk Sjekk.');
+  setEl('minClearance', '-');
+  const el = document.getElementById('minClearance');
+  if(el) el.style.color = '#0b3d66';
+}
+
+function makeHazardIcon(kind, cls){
+  return L.divIcon({
+    className: "",
+    html: '<div class="hazard-pin '+cls+'">'+kind+'</div>',
+    iconSize: [28, 28],
+    iconAnchor: [14, 14]
+  });
+}
+
+// Leser seilbar hoyde fra OSM-tagger. Returnerer meter eller null.
+function parseClearance(tags){
+  if(!tags) return null;
+  const kandidater = [
+    'seamark:bridge:clearance_height',
+    'seamark:cable_overhead:clearance_height',
+    'maxheight:physical',
+    'maxheight',
+    'clearance_height',
+    'height:clearance'
+  ];
+  for(const k of kandidater){
+    if(tags[k]){
+      const v = parseFloat(String(tags[k]).replace(',', '.'));
+      if(!isNaN(v) && v > 0 && v < 200) return v;
+    }
+  }
+  return null;
+}
+
+function hazardType(tags){
+  if(!tags) return 'ukjent';
+  if(tags.power === 'line' || tags.power === 'minor_line' ||
+     tags['seamark:type'] === 'cable_overhead') return 'luftspenn';
+  if(tags['seamark:type'] === 'bridge' || tags.bridge || tags.man_made === 'bridge') return 'bro';
+  return 'hinder';
+}
+
+function hazardName(tags, type){
+  if(tags && tags.name) return tags.name;
+  if(type === 'luftspenn') return 'Luftspenn';
+  if(type === 'bro') return 'Bro';
+  return 'Hinder';
+}
+
+async function checkClearances(){
+  if(waypoints.length < 2){ alert("Sett minst 2 waypoints forst."); return; }
+
+  const mast = numVal('mastHeight', 0);
+  const margin = numVal('clearanceMargin', 1);
+  if(mast <= 0){
+    if(!confirm("Mastehoyde er ikke satt. Vil du likevel liste opp broer og luftspenn langs ruta?")) return;
+  }
+
+  clearHazards();
+  const btn = document.getElementById('clearanceBtn');
+  if(btn) btn.disabled = true;
+  setEl('clearanceStatus', "Henter bro- og kabeldata fra OpenStreetMap...");
+
+  try {
+    const pts = waypoints.map(function(w){ return [w.marker.getLatLng().lat, w.marker.getLatLng().lng]; });
+    let minLat = 90, maxLat = -90, minLon = 180, maxLon = -180;
+    pts.forEach(function(p){
+      if(p[0] < minLat) minLat = p[0];
+      if(p[0] > maxLat) maxLat = p[0];
+      if(p[1] < minLon) minLon = p[1];
+      if(p[1] > maxLon) maxLon = p[1];
+    });
+    const pad = 0.02;
+    minLat -= pad; maxLat += pad; minLon -= pad; maxLon += pad;
+
+    const bbox = minLat.toFixed(4)+','+minLon.toFixed(4)+','+maxLat.toFixed(4)+','+maxLon.toFixed(4);
+    const query = '[out:json][timeout:30];(' +
+      'way["seamark:type"="bridge"]('+bbox+');' +
+      'way["seamark:type"="cable_overhead"]('+bbox+');' +
+      'way["bridge"]["maxheight"]('+bbox+');' +
+      'way["man_made"="bridge"]('+bbox+');' +
+      'way["power"="line"]('+bbox+');' +
+      'way["power"="minor_line"]('+bbox+');' +
+      'way["bridge"]["highway"]('+bbox+');' +
+      'way["bridge"]["railway"]('+bbox+');' +
+      ');out geom;';
+
+    const endpoints = [
+      'https://overpass-api.de/api/interpreter',
+      'https://overpass.kumi.systems/api/interpreter'
+    ];
+
+    let data = null;
+    for(const ep of endpoints){
+      try {
+        const controller = new AbortController();
+        const tid = setTimeout(function(){ controller.abort(); }, 35000);
+        const r = await fetch(ep, {
+          method: 'POST',
+          body: 'data=' + encodeURIComponent(query),
+          headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+          signal: controller.signal
+        });
+        clearTimeout(tid);
+        if(r.ok){ data = await r.json(); break; }
+      } catch(e){ console.warn("Overpass feilet mot "+ep+":", e.message); }
+    }
+
+    if(!data || !data.elements){
+      setEl('clearanceStatus', "Kunne ikke hente hoydedata fra OpenStreetMap. Prov igjen senere.");
+      return;
+    }
+
+    setEl('clearanceStatus', "Analyserer " + data.elements.length + " objekter mot ruta...");
+
+    const treff = [];
+    data.elements.forEach(function(el){
+      if(!el.geometry || el.geometry.length < 2) return;
+      const type = hazardType(el.tags);
+      const clearance = parseClearance(el.tags);
+
+      for(let g = 0; g < el.geometry.length - 1; g++){
+        const g1 = [el.geometry[g].lat, el.geometry[g].lon];
+        const g2 = [el.geometry[g+1].lat, el.geometry[g+1].lon];
+        for(let s = 0; s < pts.length - 1; s++){
+          const hit = segIntersect(pts[s], pts[s+1], g1, g2);
+          if(hit){
+            const dup = treff.some(function(t){
+              return Math.abs(t.lat - hit[0]) < 0.0008 && Math.abs(t.lon - hit[1]) < 0.0008;
+            });
+            if(!dup){
+              treff.push({
+                lat: hit[0], lon: hit[1],
+                type: type,
+                navn: hazardName(el.tags, type),
+                clearance: clearance,
+                segment: s + 1,
+                tags: el.tags || {}
+              });
+            }
+            break;
+          }
+        }
+      }
+    });
+
+    if(!treff.length){
+      setEl('clearanceStatus', "Ingen registrerte broer eller luftspenn krysser ruta. NB: OpenStreetMap kan mangle data - kontroller mot sjokart.");
+      setEl('minClearance', "Ingen");
+      return;
+    }
+
+    treff.sort(function(a,b){ return a.segment - b.segment; });
+    hazardList = treff;
+
+    const kravHoyde = mast + margin;
+    let minKlaring = Infinity;
+    let antBad = 0, antWarn = 0, antUkjent = 0;
+    let html = '';
+
+    treff.forEach(function(t, i){
+      let cls, ikon, tekst;
+      if(t.clearance === null){
+        cls = 'hz-unknown'; ikon = '?'; antUkjent++;
+        tekst = '<b style="color:#6c757d">Hoyde ikke registrert</b>';
+      } else {
+        if(t.clearance < minKlaring) minKlaring = t.clearance;
+        if(mast <= 0){
+          cls = 'hz-ok'; ikon = t.type === 'luftspenn' ? '\u26A1' : '\uD83C\uDF09';
+          tekst = '<b>' + t.clearance.toFixed(1) + ' m</b> seilbar hoyde';
+        } else if(t.clearance < kravHoyde){
+          cls = 'hz-bad'; ikon = '\u26D4'; antBad++;
+          tekst = '<b style="color:#c92a2a">' + t.clearance.toFixed(1) + ' m - FOR LAVT</b> (trenger ' + kravHoyde.toFixed(1) + ' m)';
+        } else if(t.clearance < kravHoyde + 2){
+          cls = 'hz-warn'; ikon = '\u26A0'; antWarn++;
+          tekst = '<b style="color:#fd7e14">' + t.clearance.toFixed(1) + ' m - knapt</b> (' + (t.clearance - kravHoyde).toFixed(1) + ' m til overs)';
+        } else {
+          cls = 'hz-ok'; ikon = '\u2713';
+          tekst = '<b style="color:#2b8a3e">' + t.clearance.toFixed(1) + ' m</b> (' + (t.clearance - kravHoyde).toFixed(1) + ' m klaring)';
+        }
+      }
+
+      const m = L.marker([t.lat, t.lon], {
+        icon: makeHazardIcon(ikon, cls),
+        zIndexOffset: 900
+      }).addTo(map);
+      m.bindTooltip('<b>' + t.navn + '</b> (' + t.type + ')<br>' +
+        (t.clearance !== null ? 'Seilbar hoyde: ' + t.clearance.toFixed(1) + ' m' : 'Hoyde ikke registrert i OSM') +
+        '<br>Etappe WP' + t.segment + ' til WP' + (t.segment+1), {sticky: true});
+      hazardMarkers.push(m);
+
+      html += '<div class="hz-row" onclick="zoomToHazard(' + i + ')">' +
+        '<b>' + t.navn + '</b> <small style="color:#888">(' + t.type + ', etappe ' + t.segment + ')</small><br>' +
+        tekst + '</div>';
+    });
+
+    setHtml('clearanceBox', html);
+
+    const mc = document.getElementById('minClearance');
+    if(mc){
+      if(minKlaring === Infinity){
+        mc.textContent = "Ukjent";
+        mc.style.color = '#6c757d';
+      } else {
+        mc.textContent = minKlaring.toFixed(1) + " m";
+        if(mast > 0 && minKlaring < kravHoyde) mc.style.color = '#c92a2a';
+        else if(mast > 0 && minKlaring < kravHoyde + 2) mc.style.color = '#fd7e14';
+        else mc.style.color = '#2b8a3e';
+      }
+    }
+
+    let status = "Fant " + treff.length + " kryssende objekt" + (treff.length>1?"er":"") + ". ";
+    if(antBad > 0) status += "\u26D4 " + antBad + " for lavt for masta! ";
+    if(antWarn > 0) status += "\u26A0 " + antWarn + " knapt. ";
+    if(antUkjent > 0) status += "\u26AA " + antUkjent + " uten hoydedata. ";
+    status += "Kontroller mot sjokart.";
+    setEl('clearanceStatus', status);
+
+  } catch(e){
+    console.error("Klaringssjekk feilet:", e);
+    setEl('clearanceStatus', "Feil: " + (e && e.message ? e.message : e));
+  } finally {
+    if(btn) btn.disabled = false;
+  }
+}
+
+function zoomToHazard(i){
+  if(i < 0 || i >= hazardList.length) return;
+  const t = hazardList[i];
+  map.setView([t.lat, t.lon], Math.max(map.getZoom(), 14));
+  if(hazardMarkers[i]) hazardMarkers[i].openTooltip();
+}
+
 // ===== AUTOMATISK RUTEPLANLEGGER (A*) =====
 let autoPlanning = false;
 let autoPlanCancel = false;
@@ -2536,7 +2919,6 @@ MinHeap.prototype.pop = function(){
 };
 MinHeap.prototype.size = function(){ return this.a.length; };
 
-// Fyller nedtrekkslistene med waypoints, favoritter og kartsentrum
 function refreshAutoSelects(){
   const sEl = document.getElementById('autoStart');
   const eEl = document.getElementById('autoEnd');
@@ -2613,7 +2995,6 @@ function cancelAutoPlan(){
   autoStatus("Avbryter...");
 }
 
-// Henter vind for et grovt rutenett slik at kostnaden varierer med vaeret
 async function sampleWindGrid(minLat, minLon, maxLat, maxLon, when){
   const samples = [];
   for(let a=0; a<3; a++){
@@ -2671,7 +3052,7 @@ async function autoPlanRoute(){
     const minSailRaw = document.getElementById('minSailSpeed').value.trim();
     const minSailSpd = minSailRaw === "" ? 0 : parseFloat(minSailRaw) || 0;
     const isMotorMode = document.body.classList.contains('motor-mode');
-    const marginM = parseFloat(document.getElementById('autoMargin').value) || 0;
+    const marginM = numVal('autoMargin', 0);
     const resN = parseInt(document.getElementById('autoRes').value) || 55;
 
     if(isMotorMode && motorSpd <= 0){
@@ -2679,7 +3060,6 @@ async function autoPlanRoute(){
       return;
     }
 
-    // Rutenett rundt start og slutt med god margin for omveier
     const padNM = Math.max(1.5, directNM * 0.5);
     const midLat = (start.lat + slutt.lat) / 2;
     const padLat = padNM / 60;
@@ -2709,7 +3089,6 @@ async function autoPlanRoute(){
     const toCol = function(lon){ return Math.max(0, Math.min(cols-1, Math.floor((lon - minLon) / (maxLon - minLon) * cols))); };
     const toRow = function(lat){ return Math.max(0, Math.min(rows-1, Math.floor((lat - minLat) / (maxLat - minLat) * rows))); };
 
-    // -1 ukjent, 0 fri, 1 blokkert
     const blocked = new Int8Array(cols*rows).fill(-1);
 
     async function cellBlocked(i, j){
@@ -2729,7 +3108,6 @@ async function autoPlanRoute(){
       return bad;
     }
 
-    // Optimistisk maksfart brukes som heuristikk
     let maxSpeed = motorSpd;
     currentPolar.speeds.forEach(function(row){
       row.forEach(function(v){ if(v > maxSpeed) maxSpeed = v; });
@@ -2751,11 +3129,11 @@ async function autoPlanRoute(){
     const eI = toCol(slutt.lon), eJ = toRow(slutt.lat);
 
     if(await cellBlocked(sI, sJ)){
-      autoStatus("Startpunktet ligger pa land eller grunne. Flytt det ut i farbart vann.");
+      autoStatus("Startpunktet ligger pa land eller grunne. Flytt det ut i farbart vann, eller sett dypgang til 0.");
       return;
     }
     if(await cellBlocked(eI, eJ)){
-      autoStatus("Sluttpunktet ligger pa land eller grunne. Flytt det ut i farbart vann.");
+      autoStatus("Sluttpunktet ligger pa land eller grunne. Flytt det ut i farbart vann, eller sett dypgang til 0.");
       return;
     }
 
@@ -2831,7 +3209,6 @@ async function autoPlanRoute(){
       return;
     }
 
-    // Bygg opp stien
     const cellPath = [];
     let cur = endId;
     let guard = 0;
@@ -2853,7 +3230,6 @@ async function autoPlanRoute(){
     autoStatus("Forenkler ruta...");
     await new Promise(function(r){ setTimeout(r, 0); });
 
-    // Fjern overflodige punkter der rett linje er farbar
     const simplified = [path[0]];
     let idx = 0;
     while(idx < path.length - 1){
@@ -2868,7 +3244,6 @@ async function autoPlanRoute(){
       idx = best;
     }
 
-    // Begrens antall waypoints
     let endelig = simplified;
     if(endelig.length > 30){
       const steg = Math.ceil(endelig.length / 29);
@@ -2879,7 +3254,6 @@ async function autoPlanRoute(){
       endelig = redusert;
     }
 
-    // Legg ruta inn i kartet
     bulkAdd = true;
     clearRoute();
     endelig.forEach(function(p){ addWaypoint(p[0], p[1]); });
@@ -2900,7 +3274,7 @@ async function autoPlanRoute(){
     autoProgress(100);
     autoStatus("Fant rute: " + endelig.length + " waypoints, " + ruteNM.toFixed(2) + " NM (" +
       (omvei > 0.5 ? "+"+omvei.toFixed(0)+"% mot luftlinje" : "tilnaermet rett linje") +
-      "). Beregnet pa " + sek + "s. Beregner tider...");
+      "). Beregnet pa " + sek + "s. Husk a sjekke bruer og luftspenn.");
 
     await calculateRoute();
     setTimeout(function(){ autoProgress(null); }, 1500);
@@ -3097,6 +3471,15 @@ setTimeout(function(){ map.invalidateSize(); }, 200);
 const vmgCheckbox = document.getElementById('showVmgPaths');
 if(vmgCheckbox){
   vmgCheckbox.addEventListener('change', function(){
+    if(waypoints.length >= 2) calculateRoute();
+  });
+}
+
+// Ny dypgang endrer hva som regnes som farbart - toem cache og regn pa nytt
+const draftInput = document.getElementById('draft');
+if(draftInput){
+  draftInput.addEventListener('change', function(){
+    landCache.clear();
     if(waypoints.length >= 2) calculateRoute();
   });
 }
