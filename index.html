@@ -64,7 +64,6 @@ canvas{display:block;margin:0 auto;background:#fafbfc;border-radius:6px}
 .tab-btn.active{background:white;color:#0b3d66;border-bottom:3px solid #2b8a3e}
 .tab-btn .tab-icon{font-size:18px;margin-right:6px}
 body.motor-mode .hide-in-motor-mode{display:none !important}
-body.motor-mode .hide-in-motor-mode-flex{display:none !important}
 body.motor-mode header{background:#0d4a7d}
 
 /* SIDEBAR TOGGLE */
@@ -82,28 +81,34 @@ body.sidebar-hidden .sidebar{display:none}
 .sidebar-toggle:hover{transform:translateY(-50%) scale(1.05);background:rgba(45,138,62,0.95)}
 body.sidebar-hidden #map{width:100%}
 
-/* WAYPOINT-LISTE */
-#wpList .wp-row{display:flex;align-items:center;gap:4px;padding:4px;border-bottom:1px solid #eee}
-#wpList .wp-name{flex:0 0 40px;font-weight:bold;color:#0b3d66}
-#wpList .wp-coord{flex:1;font-family:monospace;font-size:10px;color:#888}
-#wpList button{padding:3px 7px;font-size:11px;margin:0 1px}
-
 /* FAVORITTER */
 #favList{font-size:12px}
 #favList div{display:flex;justify-content:space-between;align-items:center;padding:4px;border-bottom:1px solid #eee}
-#favList button{padding:3px 7px;font-size:11px;margin:0 1px}
+#favList button{padding:3px 7px;font-size:13px;margin:0 1px;line-height:1}
 .fav-pin{
   background:#f59f00;color:white;border:2px solid white;
   border-radius:50% 50% 50% 0;transform:rotate(-45deg);
-  width:24px;height:24px;display:flex;align-items:center;justify-content:center;
+  width:26px;height:26px;display:flex;align-items:center;justify-content:center;
   box-shadow:0 2px 5px rgba(0,0,0,.4);
 }
-.fav-pin span{transform:rotate(45deg);font-size:12px}
+.fav-pin span{transform:rotate(45deg);font-size:13px;line-height:1}
 
 /* GPS-SPORING */
 .boat-marker{
-  width:28px;height:28px;display:flex;align-items:center;justify-content:center;
-  font-size:20px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.5));
+  width:30px;height:30px;display:flex;align-items:center;justify-content:center;
+  font-size:22px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.5));
+}
+
+/* KART-INTERAKSJON MED WAYPOINTS */
+.leaflet-interactive.route-seg{cursor:copy}
+.wp-popup{font-size:12px;min-width:170px}
+.wp-popup b{color:#0b3d66;font-size:13px}
+.wp-popup .coord{font-family:monospace;font-size:10px;color:#888;display:block;margin:3px 0 7px}
+.wp-popup button{width:100%;margin:2px 0;text-align:left;padding:6px 8px;font-size:12px}
+.seg-label{
+  background:rgba(255,255,255,.93);border-radius:10px;padding:1px 7px;
+  font-size:11px;font-weight:bold;white-space:nowrap;
+  box-shadow:0 1px 3px rgba(0,0,0,.3);
 }
 </style>
 </head>
@@ -111,68 +116,69 @@ body.sidebar-hidden #map{width:100%}
 <div id="helpModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center;">
   <div style="background:white;border-radius:8px;max-width:800px;max-height:90vh;width:90%;overflow-y:auto;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,0.3);">
     <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #0b3d66;padding-bottom:10px;margin-bottom:15px;">
-      <h2 style="margin:0;color:#0b3d66">Hjelp - Set Sail</h2>
-      <button onclick="hideHelp()" style="background:#c92a2a;padding:5px 12px;font-size:14px;">Lukk</button>
+      <h2 style="margin:0;color:#0b3d66">📚 Hjelp - Set Sail</h2>
+      <button onclick="hideHelp()" style="background:#c92a2a;padding:5px 12px;font-size:14px;">✕ Lukk</button>
     </div>
-    <h3 style="color:#0b3d66">Hurtigstart</h3>
+    <h3 style="color:#0b3d66">🚀 Hurtigstart</h3>
     <ol style="line-height:1.8">
-      <li><b>Klikk i kartet</b> for aa sette waypoints (minst 2)</li>
-      <li><b>Velg baat</b> i polar-seksjonen (eller last ORC-database)</li>
+      <li><b>Klikk i kartet</b> for å sette waypoints (minst 2)</li>
+      <li><b>Velg båt</b> i polar-seksjonen (eller last ORC-database)</li>
       <li><b>Sett avgangstidspunkt</b> og motorfart</li>
-      <li><b>Klikk Beregn</b> - faa full analyse</li>
+      <li><b>Klikk Beregn</b> - få full analyse</li>
     </ol>
-    <h3 style="color:#0b3d66">Waypoints</h3>
+    <h3 style="color:#0b3d66">📍 Waypoints - alt gjøres i kartet</h3>
     <ul style="line-height:1.8">
-      <li>Klikk i kartet for aa legge til waypoint</li>
-      <li>Dra markoerene for aa flytte dem</li>
-      <li>Bruk plussknappen i waypoint-listen for aa sette inn nytt punkt mellom to eksisterende</li>
-      <li>Hoeyreklikk paa en markoer, eller bruk soppelboetten, for aa slette</li>
+      <li><b>Klikk i kartet</b> for å legge til waypoint på slutten av ruta</li>
+      <li><b>Klikk på rutelinjen</b> mellom to waypoints for å sette inn et nytt punkt akkurat der</li>
+      <li><b>Dra en markør</b> for å flytte den</li>
+      <li><b>Klikk på en markør</b> for meny med slett / sett inn etter</li>
+      <li><b>Høyreklikk på en markør</b> for å slette den direkte</li>
     </ul>
-    <h3 style="color:#0b3d66">Favorittsteder</h3>
-    <p>Hoeyreklikk i kartet for aa lagre et favorittsted, eller skriv navn og klikk Legg til
-    for aa lagre kartets sentrum. Klikk paa en stjerne-pin for aa gjoere den om til waypoint.</p>
-    <h3 style="color:#0b3d66">Live sporing (GPS)</h3>
-    <p>Klikk Start sporing for aa foelge din faktiske posisjon. Krever HTTPS og at du
+    <h3 style="color:#0b3d66">⭐ Favorittsteder</h3>
+    <p>Høyreklikk i kartet for å lagre et favorittsted, eller skriv navn og klikk Legg til
+    for å lagre kartets sentrum. Klikk på en stjerne-pin for å gjøre den om til waypoint.</p>
+    <h3 style="color:#0b3d66">📡 Live sporing (GPS)</h3>
+    <p>Klikk Start sporing for å følge din faktiske posisjon. Krever HTTPS og at du
     godkjenner posisjonstilgang. Viser fart, kurs, avstand til neste waypoint og avvik fra ruta.
     Sporet kan eksporteres som GPX-fil.</p>
-    <h3 style="color:#0b3d66">Kartvalg</h3>
-    <p>Klikk lagikonet oeverst til hoeyre i kartet for aa velge mellom Kartverket Sjoekart,
+    <h3 style="color:#0b3d66">🗺 Kartvalg</h3>
+    <p>Klikk lagikonet øverst til høyre i kartet for å velge mellom Kartverket Sjøkart,
     Kartverket Topo, Esri Ocean, Esri Satellitt, OpenStreetMap og CartoDB.
-    OpenSeaMap kan legges paa som overlay med sjoemerker.</p>
-    <h3 style="color:#0b3d66">Motor- og seil-logikk</h3>
+    OpenSeaMap kan legges på som overlay med sjømerker.</p>
+    <h3 style="color:#0b3d66">🎯 Motor- og seil-logikk</h3>
     <ul style="line-height:1.8">
       <li><b>Motorfart = 0 (blank)</b>: Kun seil</li>
       <li><b>Motorfart over 0</b>: Motor brukes hvis seilfart er lavere enn min seilfart</li>
-      <li><b>Min seilfart</b>: Terskel for naar motor starter automatisk</li>
-      <li><b>Maks segment NM</b>: Lange etapper deles for noeyaktig analyse</li>
+      <li><b>Min seilfart</b>: Terskel for når motor starter automatisk</li>
+      <li><b>Maks segment NM</b>: Lange etapper deles for nøyaktig analyse</li>
     </ul>
-    <h3 style="color:#0b3d66">Jibe/Slag-tips</h3>
-    <p>Groenne stiplete linjer = anbefalt jibe (med vinden).
-    Roede stiplete linjer = anbefalt slag (mot vinden).
+    <h3 style="color:#0b3d66">💡 Jibe/Slag-tips</h3>
+    <p>Grønne stiplete linjer = anbefalt jibe (med vinden).
+    Røde stiplete linjer = anbefalt slag (mot vinden).
     Tipsene vises kun ved klart kryss eller dyp lens med minst 10 prosent gevinst.</p>
-    <h3 style="color:#0b3d66">Landunngaaelse</h3>
-    <p>Algoritmen bruker piksler fra Kartverkets offisielle sjoekart for aa detektere
-    land, tidevannssoner, grunne omraader og trygt seil-vann.</p>
-    <h3 style="color:#0b3d66;background:#fff3cd;padding:8px;border-radius:4px;border-left:4px solid #c92a2a;">Viktige forbehold</h3>
+    <h3 style="color:#0b3d66">🏔 Landunngåelse</h3>
+    <p>Algoritmen bruker piksler fra Kartverkets offisielle sjøkart for å detektere
+    land, tidevannssoner, grunne områder og trygt seil-vann.</p>
+    <h3 style="color:#0b3d66;background:#fff3cd;padding:8px;border-radius:4px;border-left:4px solid #c92a2a;">⚠ Viktige forbehold</h3>
     <ul style="line-height:1.8">
-      <li><b>Ikke en erstatning for offisielle sjoekart eller GPS</b></li>
-      <li>Polardata er estimat - bruk ORC-sertifikat for noeyaktighet</li>
-      <li>Vind- og stroemdata kan vaere forsinket eller mangle</li>
-      <li>Lokalkunnskap og sjoemannskap er nummer en</li>
+      <li>🚤 <b>Ikke en erstatning for offisielle sjøkart eller GPS</b></li>
+      <li>📊 Polardata er estimat - bruk ORC-sertifikat for nøyaktighet</li>
+      <li>🌬 Vind- og strømdata kan være forsinket eller mangle</li>
+      <li>⚓ Lokalkunnskap og sjømannskap er nummer én</li>
     </ul>
     <p style="background:#fff3cd;padding:8px;border-radius:4px;font-weight:bold;color:#856404;text-align:center;">
-      Bruk appen som <b>beslutningsstoette</b>, ikke autopilot!
+      Bruk appen som <b>beslutningsstøtte</b>, ikke autopilot!
     </p>
-    <h3 style="color:#0b3d66">Datakilder</h3>
+    <h3 style="color:#0b3d66">📡 Datakilder</h3>
     <ul style="line-height:1.8">
-      <li><b>Sjoekart</b>: Kartverket (kartverket.no)</li>
-      <li><b>Vind/Stroem/Boelger</b>: Open-Meteo (open-meteo.com)</li>
+      <li><b>Sjøkart</b>: Kartverket (kartverket.no)</li>
+      <li><b>Vind/Strøm/Bølger</b>: Open-Meteo (open-meteo.com)</li>
       <li><b>Tidevann</b>: Kartverket Sehavniva</li>
       <li><b>Polar-database</b>: ORC (data.orc.org)</li>
       <li><b>Vind-visualisering</b>: Windy (windy.com)</li>
     </ul>
-    <h3 style="color:#0b3d66">Tilbakemelding</h3>
-    <p><a href="https://github.com/andreharrang-lab/SetSail/issues/new" target="_blank">Rapporter feil eller forslag</a></p>
+    <h3 style="color:#0b3d66">💌 Tilbakemelding</h3>
+    <p><a href="https://github.com/andreharrang-lab/SetSail/issues/new" target="_blank">📝 Rapporter feil eller forslag</a></p>
     <p style="text-align:center;color:#888;font-size:11px;margin-top:20px;border-top:1px solid #ddd;padding-top:10px;">
       Let's GO - Build with passion for the water<br>God seilsommer!
     </p>
@@ -181,26 +187,26 @@ body.sidebar-hidden #map{width:100%}
 
 <div class="tab-bar">
   <button class="tab-btn active" onclick="switchMode('sail')" id="tabSail">
-    <span class="tab-icon">S</span>Sailboat
+    <span class="tab-icon">⛵</span>Sailboat
   </button>
   <button class="tab-btn" onclick="switchMode('motor')" id="tabMotor">
-    <span class="tab-icon">M</span>Motorboat
+    <span class="tab-icon">🚤</span>Motorboat
   </button>
 </div>
 
 <header>
-<h1 id="mainTitle">Let's GO - Sailboat</h1>
+<h1 id="mainTitle">⛵ Let's GO - Sailboat</h1>
 <div>
-<button onclick="clearRoute()">Toem rute</button>
+<button onclick="clearRoute()">Tøm rute</button>
 <button class="sec" onclick="removeLast()">Fjern siste WP</button>
 <button class="ok" onclick="calculateRoute()">Beregn</button>
-<button onclick="window.open('https://github.com/andreharrang-lab/SetSail/blob/main/README.md', '_blank')" style="background:#0d6efd">Hjelp</button>
-<button onclick="window.open('https://github.com/andreharrang-lab/SetSail/issues/new', '_blank')" style="background:#fd7e14">Tilbakemelding</button>
+<button onclick="window.open('https://github.com/andreharrang-lab/SetSail/blob/main/README.md', '_blank')" style="background:#0d6efd">📚 Hjelp</button>
+<button onclick="window.open('https://github.com/andreharrang-lab/SetSail/issues/new', '_blank')" style="background:#fd7e14">💬 Tilbakemelding</button>
 </div>
 </header>
 
 <div id="fatalWarn" class="warn-box"></div>
-<div id="fileWarn" class="warn-box">Kjorer via file:// - GPS-sporing krever HTTPS.</div>
+<div id="fileWarn" class="warn-box">Kjører via file:// - GPS-sporing krever HTTPS.</div>
 <div id="tileWarn" class="warn-box">Kart kunne ikke lastes - bytt kartlag.</div>
 
 <div class="layout">
@@ -209,13 +215,13 @@ body.sidebar-hidden #map{width:100%}
 <div class="sidebar">
 
 <div class="card">
-<div class="help">Tips: 1) Klikk i kartet for waypoints. 2) Sett Avgangstid, Marsjfart, Min seilfart.
-3) Lange etapper deles automatisk i delsegmenter.<br>
-Hoeyreklikk i kartet for aa lagre favorittsted.<br>
-<b>Boelge-fargekoder:</b>
-<span style="color:#0b3d66">under 1.5 m (OK)</span> |
+<div class="help">📍 <b>Waypoints:</b> Klikk i kartet for nytt punkt. Klikk på <b>rutelinjen</b> for å sette inn punkt der.
+Klikk på en <b>markør</b> for meny. Høyreklikk på markør sletter.<br>
+⭐ Høyreklikk i sjøen for å lagre favorittsted.<br>
+🌊 <b>Bølge-fargekoder:</b>
+<span style="color:#0b3d66">&lt; 1.5 m (OK)</span> |
 <span style="color:#fd7e14">1.5-2.5 m (krevende)</span> |
-<span style="color:#c92a2a">over 2.5 m (farlig)</span></div>
+<span style="color:#c92a2a">&gt; 2.5 m (farlig)</span></div>
 </div>
 
 <div class="card">
@@ -225,45 +231,37 @@ Hoeyreklikk i kartet for aa lagre favorittsted.<br>
 <div class="row hide-in-motor-mode"><label>Min seilfart kn</label><input type="number" id="minSailSpeed" placeholder="0 = ingen min" step="0.1" min="0" value="4"></div>
 <div class="row"><label>Maks segment NM</label><input type="number" id="maxSegmentNM" value="2" step="0.5" min="0.5"></div>
 <div style="font-size:11px;color:#555" class="hide-in-motor-mode">Motor starter automatisk hvis seilfart under min.</div>
-<div style="font-size:11px;color:#555;display:none" id="motorModeInfo">Reisetid beregnes med motorfart. Vind/boelger vises for komfort.</div>
+<div style="font-size:11px;color:#555;display:none" id="motorModeInfo">Reisetid beregnes med motorfart. Vind/bølger vises for komfort.</div>
 <div class="row hide-in-motor-mode" style="margin-top:6px;">
 <label style="flex:1;font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer;">
-<input type="checkbox" id="showVmgPaths" checked style="width:auto;margin:0;"> Vis VMG-baner (slag/jibe) paa kartet
+<input type="checkbox" id="showVmgPaths" checked style="width:auto;margin:0;"> Vis VMG-baner (slag/jibe) på kartet
 </label>
 </div>
 </div>
 
 <div class="card">
-<h2>Waypoints</h2>
-<div id="wpList">Klikk i kartet for aa legge til.</div>
-<div style="font-size:10px;color:#888;margin-top:6px;">
-Plussknapp = sett inn nytt WP mellom to punkter. Hoeyreklikk paa markoer = slett.
-</div>
-</div>
-
-<div class="card">
-<h2>Live sporing (GPS)</h2>
+<h2>📡 Live sporing (GPS)</h2>
 <div class="row">
-<button class="ok" id="trackStartBtn" onclick="startTracking()">Start sporing</button>
-<button class="warn" id="trackStopBtn" onclick="stopTracking()" style="display:none">Stopp</button>
+<button class="ok" id="trackStartBtn" onclick="startTracking()">▶ Start sporing</button>
+<button class="warn" id="trackStopBtn" onclick="stopTracking()" style="display:none">⏹ Stopp</button>
 </div>
 <div id="trackStatus" style="font-size:11px;color:#555;margin-top:4px;">Ikke aktiv</div>
 <div class="stats" id="trackStats" style="display:none;margin-top:6px;">
 <div class="stat"><div class="val" id="trkSpeed">-</div><div class="lbl">Fart (SOG)</div></div>
 <div class="stat"><div class="val" id="trkCourse">-</div><div class="lbl">Kurs (COG)</div></div>
-<div class="stat"><div class="val" id="trkDist">-</div><div class="lbl">Kjoert NM</div></div>
+<div class="stat"><div class="val" id="trkDist">-</div><div class="lbl">Kjørt NM</div></div>
 <div class="stat"><div class="val" id="trkToWp">-</div><div class="lbl">Til neste WP</div></div>
 <div class="stat"><div class="val" id="trkEta">-</div><div class="lbl">ETA neste WP</div></div>
 <div class="stat"><div class="val" id="trkOffset">-</div><div class="lbl">Avvik fra rute</div></div>
 </div>
 <div class="row" style="margin-top:6px;">
-<button class="sec" onclick="clearTrack()">Toem spor</button>
-<button class="sec" onclick="exportTrackGPX()">Eksporter GPX</button>
+<button class="sec" onclick="clearTrack()">🗑 Tøm spor</button>
+<button class="sec" onclick="exportTrackGPX()">💾 Eksporter GPX</button>
 </div>
 </div>
 
 <div class="card">
-<h2>Vaervindu (+/-24t fra avgang)</h2>
+<h2>Værvindu (+/-24t fra avgang)</h2>
 <div class="row"><label>Tidssteg (h)</label><input type="number" id="wwStep" value="2" min="1" max="6" step="1"></div>
 <div class="row">
 <button class="ok" onclick="findWeatherWindow()">Finn beste avgang</button>
@@ -282,7 +280,7 @@ Plussknapp = sett inn nytt WP mellom to punkter. Hoeyreklikk paa markoer = slett
 <div class="stat"><div class="val" id="currentDiff">--:--</div><div class="lbl">Diff strom</div></div>
 <div class="stat"><div class="val" id="avgWind">-</div><div class="lbl">Snitt vind</div></div>
 <div class="stat"><div class="val" id="avgSpeed">-</div><div class="lbl">Snitt SOG</div></div>
-<div class="stat"><div class="val" id="maxWave">-</div><div class="lbl">Maks boelge</div></div>
+<div class="stat"><div class="val" id="maxWave">-</div><div class="lbl">Maks bølge</div></div>
 </div>
 <div id="currentEffect" class="current-effect current-neutral">Klikk Beregn for strom-effekt</div>
 <div id="etaInfo" style="font-size:11px;color:#0b3d66;margin-top:6px;text-align:center;font-weight:bold;"></div>
@@ -311,13 +309,13 @@ Plussknapp = sett inn nytt WP mellom to punkter. Hoeyreklikk paa markoer = slett
 </div>
 
 <div class="card">
-<h2>Favorittsteder</h2>
+<h2>⭐ Favorittsteder</h2>
 <div class="row">
-<input type="text" id="favName" placeholder="Navn paa sted...">
+<input type="text" id="favName" placeholder="Navn på sted...">
 <button class="ok" onclick="addFavoriteAtCenter()">Legg til</button>
 </div>
 <div style="font-size:10px;color:#888;margin-bottom:4px;">
-Legges til i kartets sentrum, eller hoeyreklikk i kartet.
+Legges til i kartets sentrum, eller høyreklikk i kartet.
 </div>
 <div id="favList"></div>
 </div>
@@ -333,8 +331,8 @@ Legges til i kartets sentrum, eller hoeyreklikk i kartet.
 </div>
 
 <div class="card hide-in-motor-mode">
-<h2>Bat og polardiagram</h2>
-<div class="row"><label>Bat</label><select id="boatSelect" onchange="onBoatChange()"></select></div>
+<h2>Båt og polardiagram</h2>
+<div class="row"><label>Båt</label><select id="boatSelect" onchange="onBoatChange()"></select></div>
 <div class="row"><label>.pol fil</label><input type="file" id="polFile" accept=".pol,.txt,.csv" onchange="loadPolFile(event)"></div>
 <canvas id="polarCanvas" width="400" height="400"></canvas>
 <div id="polarInfo" style="font-size:11px;color:#555;margin-top:4px;"></div>
@@ -357,8 +355,8 @@ Legges til i kartets sentrum, eller hoeyreklikk i kartet.
 </select></div>
 <div class="row"><button onclick="loadORC()">Last ORC-data</button>
 <span id="orcStatus" style="font-size:11px;color:#555;"></span></div>
-<input type="text" id="orcSearch" placeholder="Sok battype..." oninput="filterORC()" style="margin:4px 0">
-<div id="orcList">Klikk "Last ORC-data" for a starte.</div>
+<input type="text" id="orcSearch" placeholder="Søk båttype..." oninput="filterORC()" style="margin:4px 0">
+<div id="orcList">Klikk "Last ORC-data" for å starte.</div>
 </div>
 
 </div></div>
@@ -405,7 +403,7 @@ function switchMode(mode){
       document.body.classList.add('motor-mode');
       tabSail.classList.remove('active');
       tabMotor.classList.add('active');
-      if(title) title.innerHTML = "Let's GO - Motorboat";
+      if(title) title.innerHTML = "\uD83D\uDEA4 Let's GO - Motorboat";
       if(motorInfo) motorInfo.style.display = 'block';
       if(motorInput && !motorInput.value) motorInput.value = 15;
       if(minSail) minSail.value = 0;
@@ -414,7 +412,7 @@ function switchMode(mode){
       document.body.classList.remove('motor-mode');
       tabSail.classList.add('active');
       tabMotor.classList.remove('active');
-      if(title) title.innerHTML = "Let's GO - Sailboat";
+      if(title) title.innerHTML = "\u26F5 Let's GO - Sailboat";
       if(motorInfo) motorInfo.style.display = 'none';
       if(minSail && minSail.value === '0') minSail.value = 4;
       localStorage.setItem('seilrute_mode', 'sail');
@@ -570,7 +568,7 @@ function loadPolFile(ev){
 async function loadORC(){
   const c = document.getElementById('orcCountry').value;
   const status = document.getElementById('orcStatus');
-  status.textContent = "Proever ORC-database...";
+  status.textContent = "Prover ORC-database...";
   let all = null, kilde = null;
 
   try {
@@ -589,7 +587,7 @@ async function loadORC(){
   } catch(e){ console.warn("ORC offisiell feilet:", e.message); }
 
   if(!all || all.length === 0){
-    status.textContent = "Proever jieter-mirror...";
+    status.textContent = "Prover jieter-mirror...";
     const years = [2026, 2025, 2024];
     for(const year of years){
       try {
@@ -605,7 +603,7 @@ async function loadORC(){
   }
 
   orcData = c === "ALL" ? all : all.filter(function(b){ return (b.country||"").toUpperCase() === c; });
-  status.textContent = "("+kilde+") "+orcData.length+" av "+all.length+" baater.";
+  status.textContent = "("+kilde+") "+orcData.length+" av "+all.length+" bater.";
   filterORC();
 }
 
@@ -808,23 +806,56 @@ L.control.layers({
   "OpenStreetMap": osm, "CartoDB": carto
 }, { "OpenSeaMap (sjomerker)": openseamap }, {position:'topright', collapsed:true}).addTo(map);
 
-map.on('click', function(e){ addWaypoint(e.latlng.lat, e.latlng.lng); });
+// Flagg som hindrer at klikk paa rutelinje ogsaa legger til waypoint paa slutten
+let suppressMapClick = false;
+
+map.on('click', function(e){
+  if(suppressMapClick){ suppressMapClick = false; return; }
+  addWaypoint(e.latlng.lat, e.latlng.lng);
+});
 map.on('contextmenu', function(e){ addFavoriteAt(e.latlng.lat, e.latlng.lng); });
 
-// ===== WAYPOINT-HAANDTERING =====
+// ===== WAYPOINT-HAANDTERING (alt i kartet) =====
+
+// Kobler alle event-handlere til en waypoint-markoer
+function attachWaypointHandlers(m){
+  m.on('dragend', calculateRoute);
+
+  // Hoeyreklikk paa markoer = slett direkte
+  m.on('contextmenu', function(ev){
+    L.DomEvent.stopPropagation(ev);
+    const i = waypoints.findIndex(function(w){ return w.marker === m; });
+    if(i >= 0) deleteWaypoint(i);
+  });
+
+  // Venstreklikk paa markoer = liten meny
+  m.on('click', function(ev){
+    L.DomEvent.stopPropagation(ev);
+    const i = waypoints.findIndex(function(w){ return w.marker === m; });
+    if(i < 0) return;
+    const ll = m.getLatLng();
+    let html = '<div class="wp-popup"><b>WP' + (i+1) + '</b>' +
+      '<span class="coord">' + ll.lat.toFixed(4) + ', ' + ll.lng.toFixed(4) + '</span>';
+    if(i < waypoints.length - 1){
+      html += '<button class="ok" onclick="insertWaypointAfter(' + i + ');map.closePopup();">\u2795 Sett inn nytt WP etter</button>';
+    }
+    html += '<button class="warn" onclick="deleteWaypoint(' + i + ');map.closePopup();">\uD83D\uDDD1 Slett WP' + (i+1) + '</button>' +
+      '<button class="sec" onclick="makeFavoriteFromWaypoint(' + i + ');map.closePopup();">\u2B50 Lagre som favoritt</button>' +
+      '</div>';
+    L.popup({closeButton:true, autoPan:true})
+      .setLatLng(ll)
+      .setContent(html)
+      .openOn(map);
+  });
+}
+
 function addWaypoint(lat, lng){
   const idx = waypoints.length+1;
   const m = L.marker([lat,lng], {draggable:true}).addTo(map)
     .bindTooltip("WP"+idx, {permanent:true, direction:'top'});
-  m.on('dragend', calculateRoute);
-  m.on('contextmenu', function(ev){
-    if(ev.originalEvent) L.DomEvent.stopPropagation(ev);
-    const i = waypoints.findIndex(function(w){ return w.marker === m; });
-    if(i >= 0) deleteWaypoint(i);
-  });
+  attachWaypointHandlers(m);
   waypoints.push({marker:m});
   if(waypoints.length === 1) fetchTide(lat, lng);
-  renderWaypointList();
   calculateRoute();
 }
 
@@ -833,46 +864,21 @@ function renumberWaypoints(){
     w.marker.unbindTooltip();
     w.marker.bindTooltip("WP"+(i+1), {permanent:true, direction:"top"});
   });
-  renderWaypointList();
 }
 
-function renderWaypointList(){
-  const list = document.getElementById("wpList");
-  if(!list) return;
-  if(!waypoints.length){
-    list.innerHTML = "Klikk i kartet for aa legge til.";
-    return;
-  }
-  let html = "";
-  waypoints.forEach(function(w, i){
-    const ll = w.marker.getLatLng();
-    html += '<div class="wp-row">' +
-      '<span class="wp-name">WP'+(i+1)+'</span>' +
-      '<span class="wp-coord">'+ll.lat.toFixed(4)+", "+ll.lng.toFixed(4)+'</span>' +
-      '<button onclick="zoomToWaypoint('+i+')" title="Zoom til">Z</button>' +
-      (i < waypoints.length-1 ? '<button class="ok" onclick="insertWaypointAfter('+i+')" title="Sett inn nytt WP etter denne">+</button>' : '') +
-      '<button class="warn" onclick="deleteWaypoint('+i+')" title="Slett">X</button>' +
-      '</div>';
-  });
-  list.innerHTML = html;
-}
-
+// Setter inn nytt waypoint midt mellom to eksisterende
 function insertWaypointAfter(index){
-  if(index >= waypoints.length - 1) return;
+  if(index < 0 || index >= waypoints.length - 1) return;
   const a = waypoints[index].marker.getLatLng();
   const b = waypoints[index+1].marker.getLatLng();
-  const midLa = (a.lat + b.lat) / 2;
-  const midLo = (a.lng + b.lng) / 2;
+  insertWaypointAt(index, (a.lat + b.lat) / 2, (a.lng + b.lng) / 2);
+}
 
-  const m = L.marker([midLa, midLo], {draggable:true}).addTo(map);
-  m.on("dragend", calculateRoute);
-  m.on("contextmenu", function(ev){
-    if(ev.originalEvent) L.DomEvent.stopPropagation(ev);
-    const idx = waypoints.findIndex(function(w){ return w.marker === m; });
-    if(idx >= 0) deleteWaypoint(idx);
-  });
-
-  waypoints.splice(index + 1, 0, {marker: m});
+// Setter inn nytt waypoint paa en eksakt posisjon etter gitt indeks
+function insertWaypointAt(afterIndex, lat, lon){
+  const m = L.marker([lat, lon], {draggable:true}).addTo(map);
+  attachWaypointHandlers(m);
+  waypoints.splice(afterIndex + 1, 0, {marker: m});
   renumberWaypoints();
   calculateRoute();
 }
@@ -885,11 +891,10 @@ function deleteWaypoint(index){
   calculateRoute();
 }
 
-function zoomToWaypoint(index){
+function makeFavoriteFromWaypoint(index){
   if(index < 0 || index >= waypoints.length) return;
   const ll = waypoints[index].marker.getLatLng();
-  map.setView(ll, Math.max(map.getZoom(), 13));
-  waypoints[index].marker.openTooltip();
+  addFavoriteAt(ll.lat, ll.lng);
 }
 
 function clearRoute(){
@@ -907,7 +912,6 @@ function clearRoute(){
   });
   setEl('etaInfo', "");
   setEl('currentEffect', "Klikk Beregn for strom-effekt");
-  renderWaypointList();
 }
 
 function removeLast(){
@@ -1209,7 +1213,7 @@ async function fetchTide(lat,lon){
       } catch(e){}
     }
     if(!txt){
-      box.innerHTML = "<i>Tidevann midlertidig utilgjengelig fra Kartverket. Proev igjen senere.</i>";
+      box.innerHTML = "<i>Tidevann midlertidig utilgjengelig fra Kartverket. Prov igjen senere.</i>";
       return;
     }
     const xml = new DOMParser().parseFromString(txt, "text/xml");
@@ -1339,17 +1343,17 @@ async function calculateZigzagPath(startLa, startLo, endLa, endLo, angleOff, seg
     const legLenNM = segDistNM / (numLegs * Math.cos(angleOff * Math.PI/180));
     let result = await tryPattern(numLegs, true);
     if(result){
-      console.log("Sik-sak OK med "+numLegs+" ben (styrbord-foerst, "+legLenNM.toFixed(2)+" NM per ben)");
+      console.log("Sik-sak OK med "+numLegs+" ben (styrbord-forst, "+legLenNM.toFixed(2)+" NM per ben)");
       return { legs: numLegs, points: result, side: 'styrbord', legLenNM: legLenNM };
     }
     result = await tryPattern(numLegs, false);
     if(result){
-      console.log("Sik-sak OK med "+numLegs+" ben (babord-foerst, "+legLenNM.toFixed(2)+" NM per ben)");
+      console.log("Sik-sak OK med "+numLegs+" ben (babord-forst, "+legLenNM.toFixed(2)+" NM per ben)");
       return { legs: numLegs, points: result, side: 'babord', legLenNM: legLenNM };
     }
   }
 
-  console.log("Ingen sik-sak-loesning funnet selv med 30 ben");
+  console.log("Ingen sik-sak-losning funnet selv med 30 ben");
   return null;
 }
 
@@ -1385,11 +1389,11 @@ async function calculateRoute(){
     if(landWarnings.length || segmentWarnings.length){
       let warnHtml = '<div style="background:#ffe3e3;color:#c92a2a;padding:6px;border-radius:4px;margin-bottom:6px;">';
       if(landWarnings.length){
-        warnHtml += '<b>ADVARSEL:</b> Waypoint(s) '+landWarnings.join(', ')+' ligger paa land/grunne!<br>';
+        warnHtml += '<b>ADVARSEL:</b> Waypoint(s) '+landWarnings.join(', ')+' ligger pa land/grunne!<br>';
       }
       if(segmentWarnings.length){
         warnHtml += '<b>ADVARSEL:</b> Linje '+segmentWarnings.join(', ')+' krysser land/grunne!<br>';
-        warnHtml += '<small>Legg til mellom-waypoints for aa unngaa dette.</small>';
+        warnHtml += '<small>Klikk pa rutelinjen for a sette inn mellom-waypoint.</small>';
       }
       warnHtml += '</div>';
       seg.innerHTML = warnHtml;
@@ -1397,42 +1401,35 @@ async function calculateRoute(){
 
     const pts = waypoints.map(function(w){ return [w.marker.getLatLng().lat, w.marker.getLatLng().lng]; });
 
-    // Tegn hovedsegmenter med fargekoding OG NM-etiketter
+    // Tegn hovedsegmenter med fargekoding. Etiketter legges til senere med tid.
     const routeSegments = [];
+    const segColors = [];
     for(let r = 0; r < pts.length - 1; r++){
       const crossesLand = await lineCrossesLand(pts[r][0], pts[r][1], pts[r+1][0], pts[r+1][1]);
       const segColor = crossesLand ? '#c92a2a' : '#2b8a3e';
-      const segWeight = crossesLand ? 4 : 3;
+      segColors.push(segColor);
+      const segWeight = crossesLand ? 5 : 4;
 
       const segLine = L.polyline([pts[r], pts[r+1]], {
-        color: segColor, weight: segWeight, opacity: 0.8
+        color: segColor, weight: segWeight, opacity: 0.8, className: 'route-seg'
       }).addTo(map);
 
-      if(crossesLand){
-        segLine.bindTooltip('ADVARSEL: Linja WP'+(r+1)+' til WP'+(r+2)+' krysser land/grunne!<br>Legg til mellom-waypoint.',
-          {sticky: true, direction: 'top'});
-        console.warn("WP"+(r+1)+"-WP"+(r+2)+" krysser land/grunne!");
-      }
+      // Klikk pa rutelinjen setter inn nytt waypoint akkurat der
+      (function(segIdx){
+        segLine.on('click', function(ev){
+          L.DomEvent.stopPropagation(ev);
+          suppressMapClick = true;
+          insertWaypointAt(segIdx, ev.latlng.lat, ev.latlng.lng);
+        });
+      })(r);
+
+      const tipBase = crossesLand
+        ? 'ADVARSEL: Linja WP'+(r+1)+' til WP'+(r+2)+' krysser land/grunne!<br>'
+        : '';
+      segLine.bindTooltip(tipBase + 'Klikk for a sette inn nytt waypoint her', {sticky: true});
+      if(crossesLand) console.warn("WP"+(r+1)+"-WP"+(r+2)+" krysser land/grunne!");
+
       routeSegments.push(segLine);
-
-      // NM-etikett midt paa segmentet
-      const segNM = haversineNM(pts[r][0], pts[r][1], pts[r+1][0], pts[r+1][1]);
-      const segBearing = bearing(pts[r][0], pts[r][1], pts[r+1][0], pts[r+1][1]);
-      const labLa = (pts[r][0] + pts[r+1][0]) / 2;
-      const labLo = (pts[r][1] + pts[r+1][1]) / 2;
-      const labelMarker = L.marker([labLa, labLo], {
-        interactive: false,
-        icon: L.divIcon({
-          className: "",
-          html: '<div style="background:rgba(255,255,255,.92);border:1px solid ' + segColor +
-                ';border-radius:10px;padding:1px 7px;font-size:11px;font-weight:bold;color:' + segColor +
-                ';white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.3);">' +
-                segNM.toFixed(2) + " NM / " + segBearing.toFixed(0) + " grader</div>",
-          iconSize: [110, 20],
-          iconAnchor: [55, 10]
-        })
-      }).addTo(map);
-      routeSegments.push(labelMarker);
     }
     routeLine = L.layerGroup(routeSegments).addTo(map);
 
@@ -1448,6 +1445,7 @@ async function calculateRoute(){
     const minSailSpd = minSailRaw === "" ? 0 : parseFloat(minSailRaw) || 0;
     const maxSegmentNM = parseFloat(document.getElementById('maxSegmentNM').value) || 2;
     const sailOnlyMode = motorSpd <= 0;
+    const isMotorMode = document.body.classList.contains('motor-mode');
     console.log("BEREGN: motor="+motorSpd+"kn, minSeil="+minSailSpd+"kn, maxSeg="+maxSegmentNM+"NM");
 
     const depInput = document.getElementById('departureTime').value;
@@ -1535,8 +1533,36 @@ async function calculateRoute(){
       const avgCourse = etappeSubCount ? etappeCourseSum/etappeSubCount : 0;
       const avgTwa = etappeSubCount ? etappeTwaSum/etappeSubCount : 0;
       const avgSailSpeed = etappeSubCount ? etappeSailSpeedSum/etappeSubCount : 0;
+      const avgSog = etappeH > 0 ? etappeNM/etappeH : 0;
 
-      const jibeAdvice = document.body.classList.contains('motor-mode') ?
+      // ETIKETT PAA KARTET: NM + tid med valgt fremdrift
+      const sailPctNum = etappeNM > 0 ? (etappeSailNM/etappeNM)*100 : 0;
+      let modeIcon;
+      if(isMotorMode){
+        modeIcon = '\uD83D\uDEA4';                                  // motorbaat
+      } else if(etappeMotorNM < 0.01){
+        modeIcon = '\u26F5';                                        // 100% seil
+      } else if(etappeSailNM < 0.01){
+        modeIcon = '\uD83D\uDEA4';                                  // 100% motor
+      } else {
+        modeIcon = '\u26F5\uD83D\uDEA4';                            // blandet
+      }
+      const labLa = (pts[i][0] + pts[i+1][0]) / 2;
+      const labLo = (pts[i][1] + pts[i+1][1]) / 2;
+      const labColor = segColors[i] || '#2b8a3e';
+      const labelMarker = L.marker([labLa, labLo], {
+        interactive: false,
+        icon: L.divIcon({
+          className: "",
+          html: '<div class="seg-label" style="border:1px solid ' + labColor + ';color:' + labColor + ';">' +
+                etappeNM.toFixed(2) + ' NM &middot; ' + fmtT(etappeH) + ' ' + modeIcon + '</div>',
+          iconSize: [130, 20],
+          iconAnchor: [65, 10]
+        })
+      }).addTo(map);
+      routeLine.addLayer(labelMarker);
+
+      const jibeAdvice = isMotorMode ?
         null :
         evaluateJibeAdvantage(avgTwa, avgWindSpd, motorSpd, minSailSpd, etappeNM, avgCourse, avgWindDir);
 
@@ -1561,7 +1587,7 @@ async function calculateRoute(){
               {color: adviceColor, weight: 2.5, dashArray:'10,5', opacity: 0.85}).addTo(map);
             benLine.bindTooltip(
               'Ben '+(k+1)+'/'+zigzag.legs+' ('+zigzag.legLenNM.toFixed(1)+' NM)<br>'+
-              jibeAdvice.type+' '+zigzag.side+'-foerst, TWA '+jibeAdvice.bestTWA+' grader: '+jibeAdvice.optimalSpeed+' kn<br>'+
+              jibeAdvice.type+' '+zigzag.side+'-forst, TWA '+jibeAdvice.bestTWA+' grader: '+jibeAdvice.optimalSpeed+' kn<br>'+
               'Sparer '+jibeAdvice.savedMin+' min totalt',
               {sticky: true}
             );
@@ -1577,7 +1603,7 @@ async function calculateRoute(){
         } else {
           const warnMarker = L.circleMarker([startLa, startLo], {
             radius: 8, color: '#fd7e14', fillColor: '#fff', fillOpacity: 1, weight: 2.5
-          }).bindTooltip(jibeAdvice.type.toUpperCase()+' anbefales men landunngaaelse mislyktes. Legg til mellom-waypoints manuelt.', {sticky: true}).addTo(map);
+          }).bindTooltip(jibeAdvice.type.toUpperCase()+' anbefales men landunngaelse mislyktes. Sett inn mellom-waypoint manuelt.', {sticky: true}).addTo(map);
           vmgLines.push(warnMarker);
         }
       }
@@ -1585,10 +1611,10 @@ async function calculateRoute(){
       totalNM += etappeNM;
       totalH += etappeH;
       totalHnoCurrent += etappeHnoCur;
-      if(avgWindSpd > 0){ windSum += avgWindSpd; spdSum += etappeNM/etappeH; n++; }
+      if(avgWindSpd > 0){ windSum += avgWindSpd; spdSum += avgSog; n++; }
 
       const tFmt = function(d){ return d.toLocaleString('nb-NO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); };
-      const sailPct = etappeNM > 0 ? ((etappeSailNM/etappeNM)*100).toFixed(0) : "0";
+      const sailPct = sailPctNum.toFixed(0);
       const motorPct = etappeNM > 0 ? ((etappeMotorNM/etappeNM)*100).toFixed(0) : "0";
 
       let modeStr;
@@ -1617,7 +1643,7 @@ async function calculateRoute(){
       if(avgTwa < 35) twaLabel = ' (kryss)';
       else if(avgTwa < 60) twaLabel = ' (bidevind)';
       else if(avgTwa < 100) twaLabel = ' (halvvind)';
-      else if(avgTwa < 150) twaLabel = ' (rom skjoets)';
+      else if(avgTwa < 150) twaLabel = ' (rom skjots)';
       else twaLabel = ' (lens)';
 
       const minSailVal = parseFloat(document.getElementById('minSailSpeed').value)||0;
@@ -1626,12 +1652,12 @@ async function calculateRoute(){
       seg.innerHTML += '<div><b>WP'+(i+1)+' til WP'+(i+2)+'</b> ('+(subPts.length-1)+' delsegmenter)<br>'+
         tFmt(segStart)+' til '+tFmt(currentTime)+'<br>'+
         'Kompasskurs: <b>'+avgCourse.toFixed(0)+' grader</b> | Vind snitt: '+windStr+'<br>'+
-        (document.body.classList.contains('motor-mode') ?
+        (isMotorMode ?
           '' :
           'TWA: <b>'+avgTwa.toFixed(0)+' grader</b>'+twaLabel+' | Polar-fart: <b style="color:'+sailSpeedColor+'">'+avgSailSpeed.toFixed(1)+' kn</b><br>'
         )+
-        'Distanse: '+etappeNM.toFixed(2)+' NM | Maks boelge: '+waveStr+'<br>'+
-        (jibeAdvice ? '<div style="background:#fff3cd;padding:4px;border-radius:3px;margin:4px 0;font-size:11px;"><b>'+jibeAdvice.type+'-tips:</b> Seil i Z-moenster med TWA '+jibeAdvice.bestTWA+' grader - <b style="color:#2b8a3e">sparer '+jibeAdvice.savedMin+' min ('+jibeAdvice.gainPct+'% raskere)</b><br>Direkte: '+jibeAdvice.directSpeed+' kn. Taktisk: '+jibeAdvice.optimalSpeed+' kn ('+jibeAdvice.extraDistancePct+'% lengre)</div>' : '')+
+        'Distanse: '+etappeNM.toFixed(2)+' NM | Snittfart: <b>'+avgSog.toFixed(1)+' kn</b> | Maks bolge: '+waveStr+'<br>'+
+        (jibeAdvice ? '<div style="background:#fff3cd;padding:4px;border-radius:3px;margin:4px 0;font-size:11px;"><b>'+jibeAdvice.type+'-tips:</b> Seil i Z-monster med TWA '+jibeAdvice.bestTWA+' grader - <b style="color:#2b8a3e">sparer '+jibeAdvice.savedMin+' min ('+jibeAdvice.gainPct+'% raskere)</b><br>Direkte: '+jibeAdvice.directSpeed+' kn. Taktisk: '+jibeAdvice.optimalSpeed+' kn ('+jibeAdvice.extraDistancePct+'% lengre)</div>' : '')+
         modeStr+'<br>'+
         'Tid: '+fmtT(etappeH)+' (uten strom: '+fmtT(etappeHnoCur)+') '+currStr+'</div>';
     }
@@ -1680,7 +1706,6 @@ async function calculateRoute(){
     const modeLabel = sailOnlyMode ? 'KUN SEIL (ingen motor)' : 'Motor: '+motorSpd+' kn (min seil '+minSailSpd+' kn)';
     setHtml('etaInfo', 'Avgang: '+depFmt+' -> ETA: '+etaFmt+'<br>'+modeLabel);
 
-    // Oppdater navigasjonsinfo hvis GPS-sporing er aktiv
     if(typeof trackPoints !== 'undefined' && trackPoints.length){
       const last = trackPoints[trackPoints.length-1];
       updateNavigationInfo(last.lat, last.lon, null);
@@ -1719,7 +1744,7 @@ function clearIsochrones(){
 }
 
 async function drawIsochrones(){
-  if(!waypoints.length){ alert("Sett startpunkt foerst."); return; }
+  if(!waypoints.length){ alert("Sett startpunkt forst."); return; }
   clearIsochrones();
   const startLat = waypoints[0].marker.getLatLng().lat;
   const startLon = waypoints[0].marker.getLatLng().lng;
@@ -1943,9 +1968,10 @@ async function findWeatherWindow(){
         const sx = (curr.speed||0)*Math.sin(crRad), sy = (curr.speed||0)*Math.cos(crRad);
         const sogAlong = (bx+sx)*Math.sin(cRad)+(by+sy)*Math.cos(cRad);
         const sog = Math.max(0.05, sogAlong);
-        totalH += subNM/sog;
+        const subHours = subNM/sog;
+        totalH += subHours;
         totalHnoCurrent += subNM/Math.max(0.05, speed);
-        currentTime = new Date(currentTime.getTime()+(subNM/sog)*3600000);
+        currentTime = new Date(currentTime.getTime()+subHours*3600000);
       }
     }
     results.push({ departure: candDep, hours: totalH, hoursNoCurrent: totalHnoCurrent });
@@ -2054,9 +2080,9 @@ function setFavorites(f){ localStorage.setItem(FAV_KEY, JSON.stringify(f)); }
 function makeFavIcon(){
   return L.divIcon({
     className: "",
-    html: '<div class="fav-pin"><span>*</span></div>',
-    iconSize: [24, 24],
-    iconAnchor: [12, 24]
+    html: '<div class="fav-pin"><span>\u2B50</span></div>',
+    iconSize: [26, 26],
+    iconAnchor: [13, 26]
   });
 }
 
@@ -2070,14 +2096,14 @@ function addFavorite(lat, lon, name){
 function addFavoriteAtCenter(){
   const nameEl = document.getElementById("favName");
   const name = nameEl.value.trim();
-  if(!name){ alert("Skriv inn navn paa stedet."); return; }
+  if(!name){ alert("Skriv inn navn pa stedet."); return; }
   const c = map.getCenter();
   addFavorite(c.lat, c.lng, name);
   nameEl.value = "";
 }
 
 function addFavoriteAt(lat, lon){
-  const name = prompt("Navn paa favorittsted:");
+  const name = prompt("Navn pa favorittsted:");
   if(!name || !name.trim()) return;
   addFavorite(lat, lon, name.trim());
 }
@@ -2122,12 +2148,17 @@ function renderFavorites(){
 
   favs.forEach(function(f, i){
     const m = L.marker([f.lat, f.lon], {icon: makeFavIcon(), zIndexOffset: -100})
-      .bindTooltip(f.name, {direction: "top"})
+      .bindTooltip('\u2B50 ' + f.name, {direction: "top"})
       .addTo(map);
-    m.on("click", function(){
-      if(confirm("Legg til " + f.name + " som waypoint?")){
-        addWaypoint(f.lat, f.lon);
-      }
+    m.on("click", function(ev){
+      L.DomEvent.stopPropagation(ev);
+      const html = '<div class="wp-popup"><b>\u2B50 ' + f.name + '</b>' +
+        '<span class="coord">' + f.lat.toFixed(4) + ', ' + f.lon.toFixed(4) + '</span>' +
+        '<button class="ok" onclick="favoriteToWaypoint(' + i + ');map.closePopup();">\u2795 Legg til som waypoint</button>' +
+        '<button class="sec" onclick="renameFavorite(' + i + ');map.closePopup();">\u270F\uFE0F Endre navn</button>' +
+        '<button class="warn" onclick="deleteFavorite(' + i + ');map.closePopup();">\uD83D\uDDD1\uFE0F Slett favoritt</button>' +
+        '</div>';
+      L.popup().setLatLng([f.lat, f.lon]).setContent(html).openOn(map);
     });
     favMarkers.push(m);
   });
@@ -2137,13 +2168,13 @@ function renderFavorites(){
       list.innerHTML = "<i>Ingen favoritter lagret.</i>";
     } else {
       list.innerHTML = favs.map(function(f, i){
-        return '<div><span><b>' + f.name + '</b> ' +
+        return '<div><span><b>\u2B50 ' + f.name + '</b> ' +
           '<small style="color:#888">(' + f.lat.toFixed(3) + ", " + f.lon.toFixed(3) + ')</small></span>' +
           '<span>' +
-          '<button onclick="zoomToFavorite(' + i + ')" title="Zoom til">Z</button>' +
-          '<button class="ok" onclick="favoriteToWaypoint(' + i + ')" title="Legg til som waypoint">+</button>' +
-          '<button class="sec" onclick="renameFavorite(' + i + ')" title="Endre navn">E</button>' +
-          '<button class="warn" onclick="deleteFavorite(' + i + ')" title="Slett">X</button>' +
+          '<button onclick="zoomToFavorite(' + i + ')" title="Zoom til">\uD83D\uDD0D</button>' +
+          '<button class="ok" onclick="favoriteToWaypoint(' + i + ')" title="Legg til som waypoint">\u2795</button>' +
+          '<button class="sec" onclick="renameFavorite(' + i + ')" title="Endre navn">\u270F\uFE0F</button>' +
+          '<button class="warn" onclick="deleteFavorite(' + i + ')" title="Slett">\uD83D\uDDD1\uFE0F</button>' +
           '</span></div>';
       }).join("");
     }
@@ -2159,15 +2190,15 @@ let trackTotalNM = 0;
 
 function startTracking(){
   if(!navigator.geolocation){
-    alert("GPS/geolokasjon stoettes ikke av denne nettleseren.");
+    alert("GPS/geolokasjon stottes ikke av denne nettleseren.");
     return;
   }
   if(location.protocol !== "https:" && location.hostname !== "localhost"){
-    alert("GPS krever HTTPS. Aapne appen via GitHub Pages-lenken.");
+    alert("GPS krever HTTPS. Apne appen via GitHub Pages-lenken.");
     return;
   }
 
-  setEl("trackStatus", "Venter paa GPS-signal...");
+  setEl("trackStatus", "Venter pa GPS-signal...");
   document.getElementById("trackStartBtn").style.display = "none";
   document.getElementById("trackStopBtn").style.display = "inline-block";
   document.getElementById("trackStats").style.display = "grid";
@@ -2221,7 +2252,7 @@ function onTrackPosition(pos){
   } else {
     boatMarker = L.marker([lat, lon], {
       zIndexOffset: 1000,
-      icon: L.divIcon({className: "", html: '<div class="boat-marker">B</div>', iconSize: [28,28], iconAnchor: [14,14]})
+      icon: L.divIcon({className: "", html: '<div class="boat-marker">\uD83D\uDEA4</div>', iconSize: [30,30], iconAnchor: [15,15]})
     }).addTo(map);
   }
   boatMarker.bindTooltip("Din posisjon (+/-" + acc.toFixed(0) + " m)", {direction: "top"});
@@ -2247,7 +2278,7 @@ function onTrackPosition(pos){
   setEl("trkSpeed", sogKn !== null ? sogKn.toFixed(1) + " kn" : "-");
   setEl("trkCourse", cogDeg !== null ? cogDeg.toFixed(0) + " gr" : "-");
   setEl("trkDist", trackTotalNM.toFixed(2) + " NM");
-  setEl("trackStatus", "Aktiv - noeyaktighet +/-" + acc.toFixed(0) + " m - " + trackPoints.length + " punkter");
+  setEl("trackStatus", "Aktiv - noyaktighet +/-" + acc.toFixed(0) + " m - " + trackPoints.length + " punkter");
 
   updateNavigationInfo(lat, lon, sogKn);
 }
@@ -2303,12 +2334,12 @@ function clearTrack(){
   if(boatMarker){ map.removeLayer(boatMarker); boatMarker = null; }
   trackPoints = [];
   trackTotalNM = 0;
-  setEl("trackStatus", trackWatchId !== null ? "Aktiv (spor toemt)" : "Ikke aktiv");
+  setEl("trackStatus", trackWatchId !== null ? "Aktiv (spor tomt)" : "Ikke aktiv");
   ["trkSpeed","trkCourse","trkDist","trkToWp","trkEta","trkOffset"].forEach(function(id){ setEl(id, "-"); });
 }
 
 function exportTrackGPX(){
-  if(!trackPoints.length){ alert("Ingen sporpunkter aa eksportere."); return; }
+  if(!trackPoints.length){ alert("Ingen sporpunkter a eksportere."); return; }
   let gpx = '<?xml version="1.0" encoding="UTF-8"?>\n';
   gpx += '<gpx version="1.1" creator="Set Sail" xmlns="http://www.topografix.com/GPX/1/1">\n';
   gpx += "<trk><name>Set Sail spor " + new Date().toLocaleString("nb-NO") + "</name><trkseg>\n";
@@ -2338,7 +2369,6 @@ if(vmgCheckbox){
 
 drawPolar();
 renderRouteList();
-renderWaypointList();
 renderFavorites();
 </script>
 </body>
