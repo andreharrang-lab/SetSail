@@ -110,6 +110,13 @@ body.sidebar-hidden #map{width:100%}
   font-size:11px;font-weight:bold;white-space:nowrap;
   box-shadow:0 1px 3px rgba(0,0,0,.3);
 }
+
+/* AUTOMATISK RUTEPLANLEGGER */
+#autoStatus{font-size:11px;color:#555;margin-top:4px;min-height:14px}
+.auto-progress{
+  height:6px;background:#e9ecef;border-radius:3px;overflow:hidden;margin-top:5px;display:none;
+}
+.auto-progress span{display:block;height:100%;background:#2b8a3e;width:0%;transition:width .2s}
 </style>
 </head>
 <body>
@@ -126,6 +133,18 @@ body.sidebar-hidden #map{width:100%}
       <li><b>Sett avgangstidspunkt</b> og motorfart</li>
       <li><b>Klikk Beregn</b> - få full analyse</li>
     </ol>
+    <h3 style="color:#0b3d66">🧭 Automatisk ruteplanlegger</h3>
+    <p>Velg et startpunkt og et sluttpunkt, så finner appen selv en farbar rute mellom dem.
+    Algoritmen bruker Kartverkets sjøkart til å unngå land og grunner, og vekter hvert
+    mulig steg etter hvor fort båten faktisk går der ut fra vind og polardiagram.</p>
+    <ul style="line-height:1.8">
+      <li><b>Fra / Til</b>: Velg eksisterende waypoint, et favorittsted eller kartets sentrum</li>
+      <li><b>Oppløsning</b>: Finere rutenett gir bedre rute, men tar lengre tid</li>
+      <li><b>Klaring</b>: Minste avstand ruta skal holde til land og grunner</li>
+    </ul>
+    <p>Resultatet blir en ferdig rute med waypoints du kan dra på, slette eller supplere
+    på vanlig måte. Kjøres i seilbåt-modus vektes ruta etter polarfart, i motorbåt-modus
+    etter marsjfart.</p>
     <h3 style="color:#0b3d66">📍 Waypoints - alt gjøres i kartet</h3>
     <ul style="line-height:1.8">
       <li><b>Klikk i kartet</b> for å legge til waypoint på slutten av ruta</li>
@@ -139,23 +158,14 @@ body.sidebar-hidden #map{width:100%}
     for å lagre kartets sentrum. Klikk på en stjerne-pin for meny.</p>
     <h3 style="color:#0b3d66">🔗 Del og sikkerhetskopier</h3>
     <ul style="line-height:1.8">
-      <li><b>Delingslenke</b>: Lager en lenke med ruta innebygd. Send den til hvem som helst - de åpner appen med ruta ferdig plottet.</li>
-      <li><b>Eksporter alt</b>: Lagrer alle ruter og favoritter som JSON-fil. Bruk til backup eller for å dele hele samlingen.</li>
-      <li><b>Importer</b>: Leser inn en JSON-fil. Du velger om den skal legges til eller erstatte det du har.</li>
-      <li><b>GPX</b>: Eksporter rute eller favoritter i GPX-format for kartplottere og andre navigasjonsapper.</li>
+      <li><b>Delingslenke</b>: Lager en lenke med ruta innebygd. Send den til hvem som helst.</li>
+      <li><b>Eksporter alt</b>: Lagrer alle ruter og favoritter som JSON-fil.</li>
+      <li><b>Importer</b>: Leser inn en JSON-fil. Du velger legg til eller erstatt.</li>
+      <li><b>GPX</b>: Eksporter rute eller favoritter for kartplottere.</li>
     </ul>
-    <p style="background:#e7f5ff;padding:8px;border-radius:4px;font-size:12px;">
-      <b>Tips:</b> Data lagres kun i din egen nettleser. Tar du en eksport med jevne mellomrom,
-      har du en trygg backup hvis du bytter maskin eller tømmer nettleserdata.
-    </p>
     <h3 style="color:#0b3d66">📡 Live sporing (GPS)</h3>
     <p>Klikk Start sporing for å følge din faktiske posisjon. Krever HTTPS og at du
-    godkjenner posisjonstilgang. Viser fart, kurs, avstand til neste waypoint og avvik fra ruta.
-    Sporet kan eksporteres som GPX-fil.</p>
-    <h3 style="color:#0b3d66">🗺 Kartvalg</h3>
-    <p>Klikk lagikonet øverst til høyre i kartet for å velge mellom Kartverket Sjøkart,
-    Kartverket Topo, Esri Ocean, Esri Satellitt, OpenStreetMap og CartoDB.
-    OpenSeaMap kan legges på som overlay med sjømerker.</p>
+    godkjenner posisjonstilgang. Viser fart, kurs, avstand til neste waypoint og avvik fra ruta.</p>
     <h3 style="color:#0b3d66">🎯 Motor- og seil-logikk</h3>
     <ul style="line-height:1.8">
       <li><b>Motorfart = 0 (blank)</b>: Kun seil</li>
@@ -163,16 +173,13 @@ body.sidebar-hidden #map{width:100%}
       <li><b>Min seilfart</b>: Terskel for når motor starter automatisk</li>
       <li><b>Maks segment NM</b>: Lange etapper deles for nøyaktig analyse</li>
     </ul>
-    <h3 style="color:#0b3d66">💡 Jibe/Slag-tips</h3>
-    <p>Grønne stiplete linjer = anbefalt jibe (med vinden).
-    Røde stiplete linjer = anbefalt slag (mot vinden).
-    Tipsene vises kun ved klart kryss eller dyp lens med minst 10 prosent gevinst.</p>
     <h3 style="color:#0b3d66">🏔 Landunngåelse</h3>
     <p>Algoritmen bruker piksler fra Kartverkets offisielle sjøkart for å detektere
     land, tidevannssoner, grunne områder og trygt seil-vann.</p>
     <h3 style="color:#0b3d66;background:#fff3cd;padding:8px;border-radius:4px;border-left:4px solid #c92a2a;">⚠ Viktige forbehold</h3>
     <ul style="line-height:1.8">
       <li>🚤 <b>Ikke en erstatning for offisielle sjøkart eller GPS</b></li>
+      <li>🧭 Automatisk rute er et forslag - kontroller alltid mot sjøkart</li>
       <li>📊 Polardata er estimat - bruk ORC-sertifikat for nøyaktighet</li>
       <li>🌬 Vind- og strømdata kan være forsinket eller mangle</li>
       <li>⚓ Lokalkunnskap og sjømannskap er nummer én</li>
@@ -233,6 +240,31 @@ Klikk på en <b>markør</b> for meny. Høyreklikk på markør sletter.<br>
 <span style="color:#0b3d66">&lt; 1.5 m (OK)</span> |
 <span style="color:#fd7e14">1.5-2.5 m (krevende)</span> |
 <span style="color:#c92a2a">&gt; 2.5 m (farlig)</span></div>
+</div>
+
+<div class="card">
+<h2>🧭 Automatisk ruteplanlegger</h2>
+<div class="row"><label>Fra</label><select id="autoStart"></select></div>
+<div class="row"><label>Til</label><select id="autoEnd"></select></div>
+<div class="row"><label>Oppløsning</label>
+<select id="autoRes">
+<option value="35">Grov (raskest)</option>
+<option value="55" selected>Middels</option>
+<option value="80">Fin (tregest)</option>
+</select></div>
+<div class="row"><label>Klaring</label>
+<select id="autoMargin">
+<option value="0">Ingen (kun land)</option>
+<option value="100" selected>100 m fra land</option>
+<option value="250">250 m fra land</option>
+<option value="500">500 m fra land</option>
+</select></div>
+<div class="row">
+<button class="ok" onclick="autoPlanRoute()" id="autoPlanBtn">🧭 Finn beste rute</button>
+<button class="warn" onclick="cancelAutoPlan()" id="autoCancelBtn" style="display:none">⏹ Avbryt</button>
+</div>
+<div class="auto-progress" id="autoProgress"><span id="autoProgressBar"></span></div>
+<div id="autoStatus">Velg start og slutt, klikk Finn beste rute.</div>
 </div>
 
 <div class="card">
@@ -410,6 +442,7 @@ function setHtml(id, html){
 }
 
 let calculatingRoute = false;
+let bulkAdd = false;
 
 // Toggle sidebar - skjul/vis for mer plass til kartet
 function toggleSidebar(){
@@ -889,8 +922,11 @@ function addWaypoint(lat, lng){
     .bindTooltip("WP"+idx, {permanent:true, direction:'top'});
   attachWaypointHandlers(m);
   waypoints.push({marker:m});
-  if(waypoints.length === 1) fetchTide(lat, lng);
-  calculateRoute();
+  if(waypoints.length === 1 && !bulkAdd) fetchTide(lat, lng);
+  if(!bulkAdd){
+    refreshAutoSelects();
+    calculateRoute();
+  }
 }
 
 function renumberWaypoints(){
@@ -912,6 +948,7 @@ function insertWaypointAt(afterIndex, lat, lon){
   attachWaypointHandlers(m);
   waypoints.splice(afterIndex + 1, 0, {marker: m});
   renumberWaypoints();
+  refreshAutoSelects();
   calculateRoute();
 }
 
@@ -920,6 +957,7 @@ function deleteWaypoint(index){
   map.removeLayer(waypoints[index].marker);
   waypoints.splice(index, 1);
   renumberWaypoints();
+  refreshAutoSelects();
   calculateRoute();
 }
 
@@ -944,12 +982,14 @@ function clearRoute(){
   });
   setEl('etaInfo', "");
   setEl('currentEffect', "Klikk Beregn for strom-effekt");
+  if(!bulkAdd) refreshAutoSelects();
 }
 
 function removeLast(){
   const w = waypoints.pop();
   if(w) map.removeLayer(w.marker);
   renumberWaypoints();
+  refreshAutoSelects();
   calculateRoute();
 }
 
@@ -1099,51 +1139,69 @@ function classifyKartverketPixel(r, g, b){
   return 'unknown';
 }
 
-async function isLandKartverket(lat, lon){
-  return new Promise(function(resolve){
-    const zoom = 14;
-    const n = Math.pow(2, zoom);
-    const xtile = Math.floor((lon + 180) / 360 * n);
-    const ytile = Math.floor((1 - Math.log(Math.tan(lat * Math.PI/180) + 1/Math.cos(lat * Math.PI/180))/Math.PI) / 2 * n);
-    const pixelX = Math.floor(((lon + 180) / 360 * n - xtile) * 256);
-    const pixelY = Math.floor(((1 - Math.log(Math.tan(lat * Math.PI/180) + 1/Math.cos(lat * Math.PI/180))/Math.PI) / 2 * n - ytile) * 256);
+// Tile-cache: lagrer dekodede piksler slik at hver flis kun hentes en gang.
+// Dette er avgjorende for at ruteplanleggeren skal ga raskt.
+const tilePixelCache = new Map();
+const TILE_CACHE_MAX = 260;
 
+function getTilePixels(zoom, xtile, ytile){
+  const key = zoom+'/'+xtile+'/'+ytile;
+  if(tilePixelCache.has(key)) return tilePixelCache.get(key);
+
+  const p = new Promise(function(resolve){
     const url = 'https://cache.kartverket.no/v1/wmts/1.0.0/sjokartraster/default/webmercator/'+zoom+'/'+ytile+'/'+xtile+'.png';
     const img = new Image();
     img.crossOrigin = "Anonymous";
-
-    const timeout = setTimeout(function(){ resolve(null); }, 3000);
-
+    const timeout = setTimeout(function(){ resolve(null); }, 5000);
     img.onload = function(){
       clearTimeout(timeout);
       try {
         const canvas = document.createElement('canvas');
-        canvas.width = 256;
-        canvas.height = 256;
+        canvas.width = 256; canvas.height = 256;
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
         ctx.drawImage(img, 0, 0);
-
-        const checkOffsets = [[0,0], [-2,0], [2,0], [0,-2], [0,2]];
-        const counts = {land:0, tidal:0, shallow:0, sea_deep:0, medium_sea:0, text:0, unknown:0};
-
-        for(const off of checkOffsets){
-          const px = pixelX + off[0];
-          const py = pixelY + off[1];
-          if(px < 0 || px >= 256 || py < 0 || py >= 256) continue;
-          const d = ctx.getImageData(px, py, 1, 1).data;
-          const klass = classifyKartverketPixel(d[0], d[1], d[2]);
-          counts[klass]++;
-        }
-
-        const avoidCount = counts.land + counts.tidal + counts.shallow;
-        const safeCount = counts.sea_deep + counts.medium_sea;
-        const shouldAvoid = avoidCount >= 2 || (avoidCount > safeCount && counts.unknown < 4);
-        resolve(shouldAvoid);
+        resolve(ctx.getImageData(0, 0, 256, 256).data);
       } catch(e){ resolve(null); }
     };
     img.onerror = function(){ clearTimeout(timeout); resolve(null); };
     img.src = url;
   });
+
+  if(tilePixelCache.size >= TILE_CACHE_MAX){
+    const oldest = tilePixelCache.keys().next().value;
+    tilePixelCache.delete(oldest);
+  }
+  tilePixelCache.set(key, p);
+  return p;
+}
+
+async function isLandKartverket(lat, lon){
+  const zoom = 14;
+  const n = Math.pow(2, zoom);
+  const xf = (lon + 180) / 360 * n;
+  const yf = (1 - Math.log(Math.tan(lat*Math.PI/180) + 1/Math.cos(lat*Math.PI/180))/Math.PI) / 2 * n;
+  const xtile = Math.floor(xf), ytile = Math.floor(yf);
+  const pixelX = Math.floor((xf - xtile) * 256);
+  const pixelY = Math.floor((yf - ytile) * 256);
+
+  const data = await getTilePixels(zoom, xtile, ytile);
+  if(!data) return null;
+
+  const checkOffsets = [[0,0], [-2,0], [2,0], [0,-2], [0,2]];
+  const counts = {land:0, tidal:0, shallow:0, sea_deep:0, medium_sea:0, text:0, unknown:0};
+
+  for(const off of checkOffsets){
+    const px = pixelX + off[0];
+    const py = pixelY + off[1];
+    if(px < 0 || px >= 256 || py < 0 || py >= 256) continue;
+    const idx = (py*256 + px) * 4;
+    const klass = classifyKartverketPixel(data[idx], data[idx+1], data[idx+2]);
+    counts[klass]++;
+  }
+
+  const avoidCount = counts.land + counts.tidal + counts.shallow;
+  const safeCount = counts.sea_deep + counts.medium_sea;
+  return avoidCount >= 2 || (avoidCount > safeCount && counts.unknown < 4);
 }
 
 async function isLand(lat, lon){
@@ -1213,6 +1271,29 @@ async function lineCrossesLand(la1, lo1, la2, lo2){
     if(await isLand(cLa, cLo)) return true;
   }
   return false;
+}
+
+// Som lineCrossesLand, men med valgfri sikkerhetsmargin i meter
+async function lineClearWithMargin(la1, lo1, la2, lo2, marginM){
+  const distNM = haversineNM(la1, lo1, la2, lo2);
+  const numSamples = Math.max(4, Math.ceil(distNM / 0.3));
+  const marginDeg = (marginM / 1852) / 60;
+  const courseRad = bearing(la1, lo1, la2, lo2) * Math.PI / 180;
+  const perpRad = courseRad + Math.PI/2;
+
+  for(let s = 0; s <= numSamples; s++){
+    const t = s / numSamples;
+    const cLa = la1 + (la2 - la1) * t;
+    const cLo = lo1 + (lo2 - lo1) * t;
+    if(await isLand(cLa, cLo)) return false;
+    if(marginM > 0){
+      const dLa = marginDeg * Math.cos(perpRad);
+      const dLo = marginDeg * Math.sin(perpRad) / Math.cos(cLa * Math.PI/180);
+      if(await isLand(cLa + dLa, cLo + dLo)) return false;
+      if(await isLand(cLa - dLa, cLo - dLo)) return false;
+    }
+  }
+  return true;
 }
 
 // ===== TIDEVANN =====
@@ -1425,7 +1506,7 @@ async function calculateRoute(){
       }
       if(segmentWarnings.length){
         warnHtml += '<b>ADVARSEL:</b> Linje '+segmentWarnings.join(', ')+' krysser land/grunne!<br>';
-        warnHtml += '<small>Klikk pa rutelinjen for a sette inn mellom-waypoint.</small>';
+        warnHtml += '<small>Klikk pa rutelinjen for a sette inn mellom-waypoint, eller bruk automatisk ruteplanlegger.</small>';
       }
       warnHtml += '</div>';
       seg.innerHTML = warnHtml;
@@ -2067,9 +2148,11 @@ function saveRoute(){
 function loadRoute(name){
   const routes = getRoutes();
   const r = routes[name]; if(!r) return;
+  bulkAdd = true;
   clearRoute();
   r.waypoints.forEach(function(p){ addWaypoint(p[0], p[1]); });
-  if(r.boat && polars[r.boat]){ boatSelect.value = r.boat; onBoatChange(); }
+  bulkAdd = false;
+  if(r.boat && polars[r.boat]){ boatSelect.value = r.boat; currentPolar = polars[r.boat]; drawPolar(); }
   if(r.motorSpeed !== undefined) document.getElementById('motorSpeed').value = r.motorSpeed;
   if(r.minSailSpeed !== undefined) document.getElementById('minSailSpeed').value = r.minSailSpeed;
   if(r.maxSegmentNM !== undefined) document.getElementById('maxSegmentNM').value = r.maxSegmentNM;
@@ -2077,6 +2160,9 @@ function loadRoute(name){
   document.getElementById('routeName').value = name;
   const grp = L.featureGroup(waypoints.map(function(w){ return w.marker; }));
   map.fitBounds(grp.getBounds().pad(0.2));
+  if(waypoints.length) fetchTide(waypoints[0].marker.getLatLng().lat, waypoints[0].marker.getLatLng().lng);
+  refreshAutoSelects();
+  calculateRoute();
 }
 
 function deleteRoute(name){
@@ -2210,6 +2296,8 @@ function renderFavorites(){
       }).join("");
     }
   }
+
+  refreshAutoSelects();
 }
 
 // ===== DELING OG SIKKERHETSKOPI =====
@@ -2222,13 +2310,7 @@ function b64decode(str){
 }
 
 function byggDelingsLenke(navn, pts, motor, minSail, maxSeg){
-  const payload = {
-    n: navn,
-    p: pts,
-    m: motor,
-    s: minSail,
-    x: maxSeg
-  };
+  const payload = { n: navn, p: pts, m: motor, s: minSail, x: maxSeg };
   return location.origin + location.pathname + "#r=" + b64encode(JSON.stringify(payload));
 }
 
@@ -2247,7 +2329,6 @@ function kopierLenke(url, beskrivelse){
   }
 }
 
-// Del ruta som ligger i kartet naa
 function shareCurrentRoute(){
   if(waypoints.length < 2){ alert("Trenger minst 2 waypoints for a dele en rute."); return; }
   const pts = waypoints.map(function(w){
@@ -2264,7 +2345,6 @@ function shareCurrentRoute(){
   kopierLenke(url, "Lenke");
 }
 
-// Del en lagret rute direkte fra lista
 function shareSavedRoute(name){
   const routes = getRoutes();
   const r = routes[name];
@@ -2276,7 +2356,6 @@ function shareSavedRoute(name){
   kopierLenke(url, 'Lenke til "'+name+'"');
 }
 
-// Les inn rute fra lenke ved oppstart
 function loadRouteFromHash(){
   const h = location.hash;
   if(!h || h.indexOf('#r=') !== 0) return false;
@@ -2284,8 +2363,11 @@ function loadRouteFromHash(){
     const data = JSON.parse(b64decode(h.substring(3)));
     if(!data.p || !data.p.length) return false;
 
+    bulkAdd = true;
     clearRoute();
     data.p.forEach(function(p){ addWaypoint(p[0], p[1]); });
+    bulkAdd = false;
+
     if(data.m !== undefined && data.m !== null) document.getElementById('motorSpeed').value = data.m;
     if(data.s !== undefined && data.s !== null) document.getElementById('minSailSpeed').value = data.s;
     if(data.x !== undefined && data.x !== null) document.getElementById('maxSegmentNM').value = data.x;
@@ -2296,6 +2378,8 @@ function loadRouteFromHash(){
 
     setEl('shareStatus', 'Lastet delt rute: "' + (data.n||"uten navn") + '". Klikk Lagre for a beholde den.');
     history.replaceState(null, "", location.pathname);
+    refreshAutoSelects();
+    calculateRoute();
     return true;
   } catch(e){
     console.warn("Kunne ikke lese delt rute:", e);
@@ -2303,7 +2387,6 @@ function loadRouteFromHash(){
   }
 }
 
-// Eksporter alle ruter og favoritter til fil
 function exportAllData(){
   const data = {
     app: "SetSail",
@@ -2326,7 +2409,6 @@ function exportAllData(){
   setTimeout(function(){ setEl('shareStatus', ""); }, 6000);
 }
 
-// Importer fra fil
 function importAllData(ev){
   const f = ev.target.files[0];
   if(!f) return;
@@ -2388,7 +2470,6 @@ function lastNedGPX(innhold, filnavn){
   URL.revokeObjectURL(a.href);
 }
 
-// GPX-eksport av gjeldende rute
 function exportRouteGPX(){
   if(waypoints.length < 2){ alert("Trenger minst 2 waypoints."); return; }
   const navn = (document.getElementById('routeName').value.trim()) || "SetSail rute";
@@ -2406,7 +2487,6 @@ function exportRouteGPX(){
   setTimeout(function(){ setEl('shareStatus', ""); }, 6000);
 }
 
-// GPX-eksport av favoritter
 function exportFavoritesGPX(){
   const favs = getFavorites();
   if(!favs.length){ alert("Ingen favoritter a eksportere."); return; }
@@ -2420,6 +2500,425 @@ function exportFavoritesGPX(){
   lastNedGPX(gpx, "setsail-favoritter-" + new Date().toISOString().slice(0,10) + ".gpx");
   setEl('shareStatus', "Eksporterte " + favs.length + " favoritter som GPX.");
   setTimeout(function(){ setEl('shareStatus', ""); }, 6000);
+}
+
+// ===== AUTOMATISK RUTEPLANLEGGER (A*) =====
+let autoPlanning = false;
+let autoPlanCancel = false;
+
+function MinHeap(){ this.a = []; }
+MinHeap.prototype.push = function(item){
+  const a = this.a; a.push(item); let i = a.length - 1;
+  while(i > 0){
+    const p = (i-1) >> 1;
+    if(a[p].f <= a[i].f) break;
+    const t = a[p]; a[p] = a[i]; a[i] = t; i = p;
+  }
+};
+MinHeap.prototype.pop = function(){
+  const a = this.a;
+  if(!a.length) return null;
+  const top = a[0];
+  const last = a.pop();
+  if(a.length){
+    a[0] = last;
+    let i = 0;
+    for(;;){
+      const l = 2*i+1, r = l+1;
+      let m = i;
+      if(l < a.length && a[l].f < a[m].f) m = l;
+      if(r < a.length && a[r].f < a[m].f) m = r;
+      if(m === i) break;
+      const t = a[m]; a[m] = a[i]; a[i] = t; i = m;
+    }
+  }
+  return top;
+};
+MinHeap.prototype.size = function(){ return this.a.length; };
+
+// Fyller nedtrekkslistene med waypoints, favoritter og kartsentrum
+function refreshAutoSelects(){
+  const sEl = document.getElementById('autoStart');
+  const eEl = document.getElementById('autoEnd');
+  if(!sEl || !eEl) return;
+
+  const prevS = sEl.value, prevE = eEl.value;
+  const favs = (typeof getFavorites === 'function') ? getFavorites() : [];
+
+  let opts = '';
+  if(waypoints.length){
+    opts += '<option value="wpfirst">\uD83D\uDCCD Forste waypoint (WP1)</option>';
+    if(waypoints.length > 1){
+      opts += '<option value="wplast">\uD83D\uDCCD Siste waypoint (WP'+waypoints.length+')</option>';
+    }
+  }
+  favs.forEach(function(f, i){
+    opts += '<option value="fav:'+i+'">\u2B50 '+f.name+'</option>';
+  });
+  opts += '<option value="center">\uD83D\uDDFA\uFE0F Kartets sentrum</option>';
+
+  sEl.innerHTML = opts;
+  eEl.innerHTML = opts;
+
+  const finnes = function(el, v){
+    return Array.prototype.some.call(el.options, function(o){ return o.value === v; });
+  };
+  if(prevS && finnes(sEl, prevS)) sEl.value = prevS;
+  else if(finnes(sEl, 'wpfirst')) sEl.value = 'wpfirst';
+
+  if(prevE && finnes(eEl, prevE)) eEl.value = prevE;
+  else if(finnes(eEl, 'wplast')) eEl.value = 'wplast';
+  else if(favs.length) eEl.value = 'fav:0';
+  else eEl.value = 'center';
+}
+
+function resolveAutoPoint(val){
+  if(!val) return null;
+  if(val === 'wpfirst'){
+    if(!waypoints.length) return null;
+    const ll = waypoints[0].marker.getLatLng();
+    return {lat: ll.lat, lon: ll.lng, navn: 'WP1'};
+  }
+  if(val === 'wplast'){
+    if(!waypoints.length) return null;
+    const ll = waypoints[waypoints.length-1].marker.getLatLng();
+    return {lat: ll.lat, lon: ll.lng, navn: 'WP'+waypoints.length};
+  }
+  if(val === 'center'){
+    const c = map.getCenter();
+    return {lat: c.lat, lon: c.lng, navn: 'kartsentrum'};
+  }
+  if(val.indexOf('fav:') === 0){
+    const i = parseInt(val.substring(4));
+    const favs = getFavorites();
+    if(i >= 0 && i < favs.length){
+      return {lat: favs[i].lat, lon: favs[i].lon, navn: favs[i].name};
+    }
+  }
+  return null;
+}
+
+function autoStatus(txt){ setEl('autoStatus', txt); }
+function autoProgress(pct){
+  const box = document.getElementById('autoProgress');
+  const bar = document.getElementById('autoProgressBar');
+  if(!box || !bar) return;
+  if(pct === null){ box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  bar.style.width = Math.max(0, Math.min(100, pct)) + '%';
+}
+
+function cancelAutoPlan(){
+  autoPlanCancel = true;
+  autoStatus("Avbryter...");
+}
+
+// Henter vind for et grovt rutenett slik at kostnaden varierer med vaeret
+async function sampleWindGrid(minLat, minLon, maxLat, maxLon, when){
+  const samples = [];
+  for(let a=0; a<3; a++){
+    for(let b=0; b<3; b++){
+      const la = minLat + (maxLat-minLat)*(a/2);
+      const lo = minLon + (maxLon-minLon)*(b/2);
+      const w = await getWindAt(la, lo, when);
+      samples.push({lat: la, lon: lo, speed: (w && w.speed) || 0, dir: (w && w.dir) || 0});
+    }
+  }
+  return samples;
+}
+
+function nearestWind(samples, lat, lon){
+  let best = samples[0], bestD = Infinity;
+  for(const s of samples){
+    const d = (s.lat-lat)*(s.lat-lat) + (s.lon-lon)*(s.lon-lon);
+    if(d < bestD){ bestD = d; best = s; }
+  }
+  return best;
+}
+
+async function autoPlanRoute(){
+  if(autoPlanning) return;
+
+  const startVal = document.getElementById('autoStart').value;
+  const endVal = document.getElementById('autoEnd').value;
+  const start = resolveAutoPoint(startVal);
+  const slutt = resolveAutoPoint(endVal);
+
+  if(!start || !slutt){
+    alert("Velg gyldig start og slutt. Sett et waypoint eller lagre et favorittsted forst.");
+    return;
+  }
+
+  const directNM = haversineNM(start.lat, start.lon, slutt.lat, slutt.lon);
+  if(directNM < 0.05){
+    alert("Start og slutt er for naer hverandre.");
+    return;
+  }
+  if(directNM > 300){
+    if(!confirm("Ruta er "+directNM.toFixed(0)+" NM. Beregningen kan ta lang tid. Fortsette?")) return;
+  }
+
+  autoPlanning = true;
+  autoPlanCancel = false;
+  document.getElementById('autoPlanBtn').style.display = 'none';
+  document.getElementById('autoCancelBtn').style.display = 'inline-block';
+  autoProgress(0);
+  const t0 = Date.now();
+
+  try {
+    const motorRaw = document.getElementById('motorSpeed').value.trim();
+    const motorSpd = motorRaw === "" ? 0 : parseFloat(motorRaw) || 0;
+    const minSailRaw = document.getElementById('minSailSpeed').value.trim();
+    const minSailSpd = minSailRaw === "" ? 0 : parseFloat(minSailRaw) || 0;
+    const isMotorMode = document.body.classList.contains('motor-mode');
+    const marginM = parseFloat(document.getElementById('autoMargin').value) || 0;
+    const resN = parseInt(document.getElementById('autoRes').value) || 55;
+
+    if(isMotorMode && motorSpd <= 0){
+      alert("Sett en motorfart forst.");
+      return;
+    }
+
+    // Rutenett rundt start og slutt med god margin for omveier
+    const padNM = Math.max(1.5, directNM * 0.5);
+    const midLat = (start.lat + slutt.lat) / 2;
+    const padLat = padNM / 60;
+    const padLon = padNM / (60 * Math.max(0.2, Math.cos(midLat*Math.PI/180)));
+
+    const minLat = Math.min(start.lat, slutt.lat) - padLat;
+    const maxLat = Math.max(start.lat, slutt.lat) + padLat;
+    const minLon = Math.min(start.lon, slutt.lon) - padLon;
+    const maxLon = Math.max(start.lon, slutt.lon) + padLon;
+
+    const widthNM = haversineNM(midLat, minLon, midLat, maxLon);
+    const heightNM = haversineNM(minLat, (minLon+maxLon)/2, maxLat, (minLon+maxLon)/2);
+    const cellNM = Math.max(widthNM, heightNM) / resN;
+    const cols = Math.max(8, Math.round(widthNM / cellNM));
+    const rows = Math.max(8, Math.round(heightNM / cellNM));
+
+    console.log("Ruteplanlegger: "+cols+"x"+rows+" celler, "+cellNM.toFixed(2)+" NM per celle");
+
+    autoStatus("Henter vinddata...");
+    const depInput = document.getElementById('departureTime').value;
+    const departure = depInput ? new Date(depInput) : new Date();
+    const windSamples = await sampleWindGrid(minLat, minLon, maxLat, maxLon, departure);
+    if(autoPlanCancel) throw new Error("avbrutt");
+
+    const cellLat = function(j){ return minLat + (j + 0.5) * (maxLat - minLat) / rows; };
+    const cellLon = function(i){ return minLon + (i + 0.5) * (maxLon - minLon) / cols; };
+    const toCol = function(lon){ return Math.max(0, Math.min(cols-1, Math.floor((lon - minLon) / (maxLon - minLon) * cols))); };
+    const toRow = function(lat){ return Math.max(0, Math.min(rows-1, Math.floor((lat - minLat) / (maxLat - minLat) * rows))); };
+
+    // -1 ukjent, 0 fri, 1 blokkert
+    const blocked = new Int8Array(cols*rows).fill(-1);
+
+    async function cellBlocked(i, j){
+      const id = j*cols + i;
+      if(blocked[id] !== -1) return blocked[id] === 1;
+      const la = cellLat(j), lo = cellLon(i);
+      let bad = await isLand(la, lo);
+      if(!bad && marginM > 0){
+        const dLa = (marginM/1852)/60;
+        const dLo = dLa / Math.max(0.2, Math.cos(la*Math.PI/180));
+        const offsets = [[dLa,0],[-dLa,0],[0,dLo],[0,-dLo]];
+        for(const off of offsets){
+          if(await isLand(la+off[0], lo+off[1])){ bad = true; break; }
+        }
+      }
+      blocked[id] = bad ? 1 : 0;
+      return bad;
+    }
+
+    // Optimistisk maksfart brukes som heuristikk
+    let maxSpeed = motorSpd;
+    currentPolar.speeds.forEach(function(row){
+      row.forEach(function(v){ if(v > maxSpeed) maxSpeed = v; });
+    });
+    if(isMotorMode) maxSpeed = motorSpd;
+    maxSpeed = Math.max(1, maxSpeed);
+
+    const stepCost = function(la1, lo1, la2, lo2){
+      const d = haversineNM(la1, lo1, la2, lo2);
+      if(isMotorMode) return d / motorSpd;
+      const w = nearestWind(windSamples, (la1+la2)/2, (lo1+lo2)/2);
+      const crs = bearing(la1, lo1, la2, lo2);
+      const twa = Math.abs(((w.dir - crs + 540) % 360) - 180);
+      const res = vmgRouting(twa, w.speed, motorSpd, minSailSpd);
+      return d / Math.max(0.3, res.speed);
+    };
+
+    const sI = toCol(start.lon), sJ = toRow(start.lat);
+    const eI = toCol(slutt.lon), eJ = toRow(slutt.lat);
+
+    if(await cellBlocked(sI, sJ)){
+      autoStatus("Startpunktet ligger pa land eller grunne. Flytt det ut i farbart vann.");
+      return;
+    }
+    if(await cellBlocked(eI, eJ)){
+      autoStatus("Sluttpunktet ligger pa land eller grunne. Flytt det ut i farbart vann.");
+      return;
+    }
+
+    const gScore = new Float64Array(cols*rows).fill(Infinity);
+    const cameFrom = new Int32Array(cols*rows).fill(-1);
+    const closed = new Uint8Array(cols*rows);
+    const heap = new MinHeap();
+
+    const hCost = function(i, j){
+      return haversineNM(cellLat(j), cellLon(i), slutt.lat, slutt.lon) / maxSpeed;
+    };
+
+    const startId = sJ*cols + sI;
+    const endId = eJ*cols + eI;
+    gScore[startId] = 0;
+    heap.push({id: startId, f: hCost(sI, sJ)});
+
+    const dirs = [[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]];
+    const maxExpansions = cols*rows*2;
+    let expansions = 0;
+    let found = false;
+    const startDistNM = haversineNM(start.lat, start.lon, slutt.lat, slutt.lon);
+
+    autoStatus("Soker etter farbar rute...");
+
+    while(heap.size()){
+      if(autoPlanCancel) throw new Error("avbrutt");
+
+      const node = heap.pop();
+      if(closed[node.id]) continue;
+      closed[node.id] = 1;
+
+      if(node.id === endId){ found = true; break; }
+
+      expansions++;
+      if(expansions > maxExpansions){
+        autoStatus("Fant ingen farbar rute innenfor sokegrensen. Prov grovere opplosning eller mindre klaring.");
+        return;
+      }
+
+      if(expansions % 150 === 0){
+        const ci = node.id % cols, cj = Math.floor(node.id / cols);
+        const igjen = haversineNM(cellLat(cj), cellLon(ci), slutt.lat, slutt.lon);
+        const pct = Math.max(2, Math.min(96, (1 - igjen/Math.max(0.1, startDistNM)) * 100));
+        autoProgress(pct);
+        autoStatus("Soker... " + expansions + " celler, " + igjen.toFixed(1) + " NM igjen");
+        await new Promise(function(r){ setTimeout(r, 0); });
+      }
+
+      const ci = node.id % cols, cj = Math.floor(node.id / cols);
+      const cla = cellLat(cj), clo = cellLon(ci);
+
+      for(const d of dirs){
+        const ni = ci + d[0], nj = cj + d[1];
+        if(ni < 0 || ni >= cols || nj < 0 || nj >= rows) continue;
+        const nid = nj*cols + ni;
+        if(closed[nid]) continue;
+        if(await cellBlocked(ni, nj)) continue;
+
+        const nla = cellLat(nj), nlo = cellLon(ni);
+        const tentative = gScore[node.id] + stepCost(cla, clo, nla, nlo);
+        if(tentative < gScore[nid]){
+          gScore[nid] = tentative;
+          cameFrom[nid] = node.id;
+          heap.push({id: nid, f: tentative + hCost(ni, nj)});
+        }
+      }
+    }
+
+    if(!found){
+      autoProgress(null);
+      autoStatus("Fant ingen farbar rute. Prov mindre klaring, grovere opplosning, eller legg inn et mellom-waypoint manuelt.");
+      return;
+    }
+
+    // Bygg opp stien
+    const cellPath = [];
+    let cur = endId;
+    let guard = 0;
+    while(cur !== -1 && guard++ < cols*rows){
+      cellPath.push(cur);
+      if(cur === startId) break;
+      cur = cameFrom[cur];
+    }
+    cellPath.reverse();
+
+    let path = cellPath.map(function(id){
+      const i = id % cols, j = Math.floor(id / cols);
+      return [cellLat(j), cellLon(i)];
+    });
+    path[0] = [start.lat, start.lon];
+    path[path.length-1] = [slutt.lat, slutt.lon];
+
+    autoProgress(97);
+    autoStatus("Forenkler ruta...");
+    await new Promise(function(r){ setTimeout(r, 0); });
+
+    // Fjern overflodige punkter der rett linje er farbar
+    const simplified = [path[0]];
+    let idx = 0;
+    while(idx < path.length - 1){
+      if(autoPlanCancel) throw new Error("avbrutt");
+      let best = idx + 1;
+      const maxLook = Math.min(path.length - 1, idx + 40);
+      for(let j = maxLook; j > idx + 1; j--){
+        const ok = await lineClearWithMargin(path[idx][0], path[idx][1], path[j][0], path[j][1], marginM);
+        if(ok){ best = j; break; }
+      }
+      simplified.push(path[best]);
+      idx = best;
+    }
+
+    // Begrens antall waypoints
+    let endelig = simplified;
+    if(endelig.length > 30){
+      const steg = Math.ceil(endelig.length / 29);
+      const redusert = endelig.filter(function(p, i){ return i % steg === 0; });
+      if(redusert[redusert.length-1] !== endelig[endelig.length-1]){
+        redusert.push(endelig[endelig.length-1]);
+      }
+      endelig = redusert;
+    }
+
+    // Legg ruta inn i kartet
+    bulkAdd = true;
+    clearRoute();
+    endelig.forEach(function(p){ addWaypoint(p[0], p[1]); });
+    bulkAdd = false;
+
+    const grp = L.featureGroup(waypoints.map(function(w){ return w.marker; }));
+    map.fitBounds(grp.getBounds().pad(0.15));
+    fetchTide(endelig[0][0], endelig[0][1]);
+    refreshAutoSelects();
+
+    let ruteNM = 0;
+    for(let i=0;i<endelig.length-1;i++){
+      ruteNM += haversineNM(endelig[i][0], endelig[i][1], endelig[i+1][0], endelig[i+1][1]);
+    }
+    const omvei = ((ruteNM/directNM - 1) * 100);
+    const sek = ((Date.now()-t0)/1000).toFixed(1);
+
+    autoProgress(100);
+    autoStatus("Fant rute: " + endelig.length + " waypoints, " + ruteNM.toFixed(2) + " NM (" +
+      (omvei > 0.5 ? "+"+omvei.toFixed(0)+"% mot luftlinje" : "tilnaermet rett linje") +
+      "). Beregnet pa " + sek + "s. Beregner tider...");
+
+    await calculateRoute();
+    setTimeout(function(){ autoProgress(null); }, 1500);
+
+  } catch(e){
+    autoProgress(null);
+    if(e && e.message === "avbrutt"){
+      autoStatus("Avbrutt av bruker.");
+    } else {
+      console.error("Ruteplanlegger feilet:", e);
+      autoStatus("Feil under ruteberegning: " + (e && e.message ? e.message : e));
+    }
+  } finally {
+    autoPlanning = false;
+    autoPlanCancel = false;
+    document.getElementById('autoPlanBtn').style.display = 'inline-block';
+    document.getElementById('autoCancelBtn').style.display = 'none';
+  }
 }
 
 // ===== LIVE GPS-SPORING =====
@@ -2605,6 +3104,7 @@ if(vmgCheckbox){
 drawPolar();
 renderRouteList();
 renderFavorites();
+refreshAutoSelects();
 loadRouteFromHash();
 </script>
 </body>
