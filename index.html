@@ -289,6 +289,7 @@ Klikk på en <b>markør</b> for meny. Høyreklikk på markør sletter.<br>
 <div class="row"><label>Klaring</label>
 <select id="autoMargin">
 <option value="0">Ingen (kun land)</option>
+<option value="50">50 m fra land</option>
 <option value="100" selected>100 m fra land</option>
 <option value="250">250 m fra land</option>
 <option value="500">500 m fra land</option>
@@ -1290,7 +1291,8 @@ async function isLandKartverket(lat, lon, blockShallow){
 
 async function isLand(lat, lon){
   const blockShallow = draftBlocksShallow();
-  const key = Math.round(lat*1000)/1000 + "," + Math.round(lon*1000)/1000 + "," + (blockShallow ? 'D' : 'S');
+  // 4 desimaler = ca 11 m. Grovere nokkel ville latt finmasket sampling kollapse til samme oppslag.
+  const key = Math.round(lat*10000)/10000 + "," + Math.round(lon*10000)/10000 + "," + (blockShallow ? 'D' : 'S');
   if(landCache.has(key)) return landCache.get(key);
 
   try {
@@ -1316,7 +1318,7 @@ async function isLand(lat, lon){
 
 async function countShallowAlong(la1, lo1, la2, lo2){
   const distNM = haversineNM(la1, lo1, la2, lo2);
-  const numSamples = Math.max(4, Math.ceil(distNM / 0.5));
+  const numSamples = sampleCount(distNM, 0.05, 6, 400);
   let n = 0;
   for(let s = 1; s < numSamples; s++){
     const t = s / numSamples;
@@ -1347,9 +1349,15 @@ async function checkWaypointsOnLand(){
   return warnings;
 }
 
+// Avstandsuavhengig sampling: garanterer at avstanden mellom kontrollpunktene
+// aldri overstiger stepNM, uansett hvor lang etappen er.
+function sampleCount(distNM, stepNM, minN, maxN){
+  return Math.max(minN, Math.min(maxN, Math.ceil(distNM / stepNM)));
+}
+
 async function lineCrossesLandStrict(la1, lo1, la2, lo2){
   const distNM = haversineNM(la1, lo1, la2, lo2);
-  const numSamples = Math.max(5, Math.ceil(distNM / 0.5));
+  const numSamples = sampleCount(distNM, 0.08, 6, 200);
   const courseRad = bearing(la1, lo1, la2, lo2) * Math.PI / 180;
   const perpRad = courseRad + Math.PI/2;
   const marginDeg = 0.3 / 60;
@@ -1371,8 +1379,9 @@ async function lineCrossesLandStrict(la1, lo1, la2, lo2){
 
 async function lineCrossesLand(la1, lo1, la2, lo2){
   const distNM = haversineNM(la1, lo1, la2, lo2);
-  const numSamples = Math.max(5, Math.ceil(distNM / 0.3));
-  for(let s = 1; s < numSamples; s++){
+  // 0.05 NM = ca 93 m mellom hvert kontrollpunkt, uansett etappelengde.
+  const numSamples = sampleCount(distNM, 0.05, 6, 400);
+  for(let s = 0; s <= numSamples; s++){
     const t = s / numSamples;
     const cLa = la1 + (la2 - la1) * t;
     const cLo = lo1 + (lo2 - lo1) * t;
@@ -1383,7 +1392,7 @@ async function lineCrossesLand(la1, lo1, la2, lo2){
 
 async function lineClearWithMargin(la1, lo1, la2, lo2, marginM){
   const distNM = haversineNM(la1, lo1, la2, lo2);
-  const numSamples = Math.max(4, Math.ceil(distNM / 0.3));
+  const numSamples = sampleCount(distNM, 0.05, 6, 400);
   const marginDeg = (marginM / 1852) / 60;
   const courseRad = bearing(la1, lo1, la2, lo2) * Math.PI / 180;
   const perpRad = courseRad + Math.PI/2;
@@ -3258,6 +3267,10 @@ async function autoPlanRoute(){
         if(await cellBlocked(ni, nj)) continue;
 
         const nla = cellLat(nj), nlo = cellLon(ni);
+        // Begge cellesentre kan ligge i vann selv om en smal oy ligger imellom.
+        // Midtpunktsjekk halverer dette blindfeltet.
+        if(await isLand((cla+nla)/2, (clo+nlo)/2)) continue;
+
         const tentative = gScore[node.id] + stepCost(cla, clo, nla, nlo);
         if(tentative < gScore[nid]){
           gScore[nid] = tentative;
@@ -3340,10 +3353,23 @@ async function autoPlanRoute(){
     const omvei = ((ruteNM/directNM - 1) * 100);
     const sek = ((Date.now()-t0)/1000).toFixed(1);
 
+    // Sluttkontroll: verifiser hver etappe med samme finmaskede logikk som kartet bruker.
+    autoStatus("Verifiserer ruta mot sjokartet...");
+    let ufarbare = 0;
+    for(let i=0;i<endelig.length-1;i++){
+      if(await lineCrossesLand(endelig[i][0], endelig[i][1], endelig[i+1][0], endelig[i+1][1])) ufarbare++;
+    }
+
     autoProgress(100);
-    autoStatus("Fant rute: " + endelig.length + " waypoints, " + ruteNM.toFixed(2) + " NM (" +
-      (omvei > 0.5 ? "+"+omvei.toFixed(0)+"% mot luftlinje" : "tilnaermet rett linje") +
-      "). Beregnet pa " + sek + "s." + snapNote + " Husk a sjekke bruer og luftspenn.");
+    if(ufarbare > 0){
+      autoStatus("\u26A0 Fant rute pa " + ruteNM.toFixed(2) + " NM, men " + ufarbare + " etappe" +
+        (ufarbare>1?"r":"") + " krysser fortsatt land eller grunne (vises rodt i kartet). " +
+        "Prov finere opplosning, eller klikk pa den rode linja for a sette inn waypoint manuelt." + snapNote);
+    } else {
+      autoStatus("Fant farbar rute: " + endelig.length + " waypoints, " + ruteNM.toFixed(2) + " NM (" +
+        (omvei > 0.5 ? "+"+omvei.toFixed(0)+"% mot luftlinje" : "tilnaermet rett linje") +
+        "). Beregnet pa " + sek + "s." + snapNote + " Husk a sjekke bruer og luftspenn.");
+    }
 
     await calculateRoute();
     setTimeout(function(){ autoProgress(null); }, 1500);
