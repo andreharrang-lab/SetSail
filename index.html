@@ -19,6 +19,7 @@ header h1{font-size:15px;margin:0}
 button{background:#0b3d66;color:#fff;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:12px;margin:2px}
 button.sec{background:#6c757d} button.ok{background:#2b8a3e} button.warn{background:#c92a2a}
 button:hover{opacity:.9}
+button:disabled{opacity:.5;cursor:not-allowed}
 select,input{padding:4px;border:1px solid #ccc;border-radius:3px;font-size:12px;width:100%}
 .row{display:flex;gap:6px;align-items:center;margin-bottom:5px}
 .row label{flex:0 0 100px;font-size:11px;color:#555}
@@ -174,6 +175,8 @@ body.sidebar-hidden #map{width:100%}
       <li><b>Oppløsning</b>: Finere rutenett gir bedre rute, men tar lengre tid</li>
       <li><b>Klaring</b>: Minste avstand ruta skal holde til land og grunner</li>
     </ul>
+    <p>Ligger start- eller sluttpunktet i et område som er merket grunt, flyttes det
+    automatisk ut til nærmeste farbare vann.</p>
     <h3 style="color:#0b3d66">📍 Waypoints - alt gjøres i kartet</h3>
     <ul style="line-height:1.8">
       <li><b>Klikk i kartet</b> for å legge til waypoint på slutten av ruta</li>
@@ -503,7 +506,6 @@ function numVal(id, fallback){
 let calculatingRoute = false;
 let bulkAdd = false;
 
-// Toggle sidebar - skjul/vis for mer plass til kartet
 function toggleSidebar(){
   const isHidden = document.body.classList.toggle('sidebar-hidden');
   const btn = document.getElementById('sidebarToggle');
@@ -517,7 +519,6 @@ function toggleSidebar(){
   }, 300);
 }
 
-// Fane-haandtering
 function switchMode(mode){
   try {
     const tabSail = document.getElementById('tabSail');
@@ -561,7 +562,6 @@ function hideHelp(){
   if(modal){ modal.style.display = 'none'; document.body.style.overflow = ''; }
 }
 
-// Kombinert oppstartslogikk
 window.addEventListener('load', function(){
   const savedMode = localStorage.getItem('seilrute_mode') || 'sail';
   if(savedMode === 'motor') switchMode('motor');
@@ -1088,8 +1088,6 @@ function fmtT(h){
   return String(hh).padStart(2,'0')+":"+String(mm).padStart(2,'0');
 }
 
-// Skjaeringspunkt mellom to linjestykker i lat/lon-plan.
-// Returnerer [lat, lon] eller null. Brukes til aa finne hvor ruta krysser broer.
 function segIntersect(a1, a2, b1, b2){
   const x1 = a1[1], y1 = a1[0], x2 = a2[1], y2 = a2[0];
   const x3 = b1[1], y3 = b1[0], x4 = b2[1], y4 = b2[0];
@@ -1223,13 +1221,10 @@ function classifyKartverketPixel(r, g, b){
   return 'unknown';
 }
 
-// Dypgang bestemmer om grunne omrader skal unngas.
-// Under 1,0 m regnes baten som grunn nok til a passere merkede grunner.
 function draftBlocksShallow(){
   return numVal('draft', 1.8) >= 1.0;
 }
 
-// Tile-cache: hver sjokart-flis hentes og dekodes bare en gang
 const tilePixelCache = new Map();
 const TILE_CACHE_MAX = 260;
 
@@ -1319,7 +1314,6 @@ async function isLand(lat, lon){
   }
 }
 
-// Teller hvor mange punkter langs ruta som ligger i grunt farvann
 async function countShallowAlong(la1, lo1, la2, lo2){
   const distNM = haversineNM(la1, lo1, la2, lo2);
   const numSamples = Math.max(4, Math.ceil(distNM / 0.5));
@@ -1873,7 +1867,6 @@ async function calculateRoute(){
       const minSailVal = numVal('minSailSpeed', 0);
       const sailSpeedColor = avgSailSpeed >= minSailVal ? '#2b8a3e' : '#c92a2a';
 
-      // Grunne omrader langs etappen naar dypgang er oppgitt
       let shallowNote = '';
       if(draftVal > 0){
         const nShallow = await countShallowAlong(la1, lo1, la2, lo2);
@@ -2280,10 +2273,14 @@ function saveRoute(){
 function loadRoute(name){
   const routes = getRoutes();
   const r = routes[name]; if(!r) return;
-  bulkAdd = true;
-  clearRoute();
-  r.waypoints.forEach(function(p){ addWaypoint(p[0], p[1]); });
-  bulkAdd = false;
+  // FIKS: try/finally sikrer at bulkAdd alltid nullstilles
+  try {
+    bulkAdd = true;
+    clearRoute();
+    r.waypoints.forEach(function(p){ addWaypoint(p[0], p[1]); });
+  } finally {
+    bulkAdd = false;
+  }
   if(r.boat && polars[r.boat]){ boatSelect.value = r.boat; currentPolar = polars[r.boat]; drawPolar(); }
   if(r.motorSpeed !== undefined) document.getElementById('motorSpeed').value = r.motorSpeed;
   if(r.minSailSpeed !== undefined) document.getElementById('minSailSpeed').value = r.minSailSpeed;
@@ -2499,10 +2496,14 @@ function loadRouteFromHash(){
     const data = JSON.parse(b64decode(h.substring(3)));
     if(!data.p || !data.p.length) return false;
 
-    bulkAdd = true;
-    clearRoute();
-    data.p.forEach(function(p){ addWaypoint(p[0], p[1]); });
-    bulkAdd = false;
+    // FIKS: try/finally sikrer at bulkAdd alltid nullstilles
+    try {
+      bulkAdd = true;
+      clearRoute();
+      data.p.forEach(function(p){ addWaypoint(p[0], p[1]); });
+    } finally {
+      bulkAdd = false;
+    }
 
     if(data.m !== undefined && data.m !== null) document.getElementById('motorSpeed').value = data.m;
     if(data.s !== undefined && data.s !== null) document.getElementById('minSailSpeed').value = data.s;
@@ -2521,6 +2522,7 @@ function loadRouteFromHash(){
     return true;
   } catch(e){
     console.warn("Kunne ikke lese delt rute:", e);
+    bulkAdd = false;
     return false;
   }
 }
@@ -2666,7 +2668,6 @@ function makeHazardIcon(kind, cls){
   });
 }
 
-// Leser seilbar hoyde fra OSM-tagger. Returnerer meter eller null.
 function parseClearance(tags){
   if(!tags) return null;
   const kandidater = [
@@ -3017,6 +3018,43 @@ function nearestWind(samples, lat, lon){
   return best;
 }
 
+// FIKS BUG 1: Finner en farbar celle for start/slutt.
+// Sjekker det FAKTISKE punktet forst - cellesenteret kan ligge over 1 km unna.
+// Er punktet fritt, tvinges cellen apen. Er punktet blokkert, soekes
+// naermeste frie celle i ringer utover.
+async function finnFarbarCelle(lat, lon, ctx){
+  const i0 = ctx.toCol(lon), j0 = ctx.toRow(lat);
+
+  const punktBlokkert = await isLand(lat, lon);
+  if(!punktBlokkert){
+    ctx.forceOpen(i0, j0);
+    return { i: i0, j: j0, ring: 0, snapLat: lat, snapLon: lon, flyttetNM: 0 };
+  }
+
+  const maxRing = 6;
+  for(let ring = 1; ring <= maxRing; ring++){
+    let beste = null, besteDist = Infinity;
+    for(let di = -ring; di <= ring; di++){
+      for(let dj = -ring; dj <= ring; dj++){
+        if(Math.max(Math.abs(di), Math.abs(dj)) !== ring) continue;
+        const i = i0 + di, j = j0 + dj;
+        if(i < 0 || i >= ctx.cols || j < 0 || j >= ctx.rows) continue;
+        if(await ctx.cellBlocked(i, j)) continue;
+        const d = haversineNM(lat, lon, ctx.cellLat(j), ctx.cellLon(i));
+        if(d < besteDist){ besteDist = d; beste = {i:i, j:j}; }
+      }
+    }
+    if(beste){
+      return {
+        i: beste.i, j: beste.j, ring: ring,
+        snapLat: ctx.cellLat(beste.j), snapLon: ctx.cellLon(beste.i),
+        flyttetNM: besteDist
+      };
+    }
+  }
+  return null;
+}
+
 async function autoPlanRoute(){
   if(autoPlanning) return;
 
@@ -3041,6 +3079,9 @@ async function autoPlanRoute(){
 
   autoPlanning = true;
   autoPlanCancel = false;
+  // FIKS BUG 2: rydd opp etter eventuell tidligere feil
+  bulkAdd = false;
+  calculatingRoute = false;
   document.getElementById('autoPlanBtn').style.display = 'none';
   document.getElementById('autoCancelBtn').style.display = 'inline-block';
   autoProgress(0);
@@ -3056,6 +3097,7 @@ async function autoPlanRoute(){
     const resN = parseInt(document.getElementById('autoRes').value) || 55;
 
     if(isMotorMode && motorSpd <= 0){
+      autoProgress(null);
       alert("Sett en motorfart forst.");
       return;
     }
@@ -3125,17 +3167,38 @@ async function autoPlanRoute(){
       return d / Math.max(0.3, res.speed);
     };
 
-    const sI = toCol(start.lon), sJ = toRow(start.lat);
-    const eI = toCol(slutt.lon), eJ = toRow(slutt.lat);
+    // FIKS BUG 1: bruk finnFarbarCelle i stedet for a sjekke cellesenteret direkte
+    const ctx = {
+      cols: cols, rows: rows,
+      cellLat: cellLat, cellLon: cellLon,
+      toCol: toCol, toRow: toRow,
+      cellBlocked: cellBlocked,
+      forceOpen: function(i, j){ blocked[j*cols + i] = 0; }
+    };
 
-    if(await cellBlocked(sI, sJ)){
-      autoStatus("Startpunktet ligger pa land eller grunne. Flytt det ut i farbart vann, eller sett dypgang til 0.");
+    autoStatus("Sjekker start- og sluttpunkt...");
+    const sCelle = await finnFarbarCelle(start.lat, start.lon, ctx);
+    if(!sCelle){
+      autoProgress(null);
+      autoStatus("Fant ikke farbart vann naer startpunktet. " +
+        (draftBlocksShallow() ? "Dypgang " + numVal('draft',0).toFixed(1) + " m blokkerer grunner - prov lavere dypgang." : "Flytt startpunktet."));
       return;
     }
-    if(await cellBlocked(eI, eJ)){
-      autoStatus("Sluttpunktet ligger pa land eller grunne. Flytt det ut i farbart vann, eller sett dypgang til 0.");
+    const eCelle = await finnFarbarCelle(slutt.lat, slutt.lon, ctx);
+    if(!eCelle){
+      autoProgress(null);
+      autoStatus("Fant ikke farbart vann naer sluttpunktet. " +
+        (draftBlocksShallow() ? "Dypgang " + numVal('draft',0).toFixed(1) + " m blokkerer grunner - prov lavere dypgang." : "Flytt sluttpunktet."));
       return;
     }
+
+    const sI = sCelle.i, sJ = sCelle.j;
+    const eI = eCelle.i, eJ = eCelle.j;
+
+    let snapNote = "";
+    if(sCelle.ring > 0) snapNote += " Start flyttet " + (sCelle.flyttetNM*1852).toFixed(0) + " m ut i farbart vann.";
+    if(eCelle.ring > 0) snapNote += " Slutt flyttet " + (eCelle.flyttetNM*1852).toFixed(0) + " m ut i farbart vann.";
+    if(snapNote) console.log("Ruteplanlegger:" + snapNote);
 
     const gScore = new Float64Array(cols*rows).fill(Infinity);
     const cameFrom = new Int32Array(cols*rows).fill(-1);
@@ -3170,6 +3233,7 @@ async function autoPlanRoute(){
 
       expansions++;
       if(expansions > maxExpansions){
+        autoProgress(null);
         autoStatus("Fant ingen farbar rute innenfor sokegrensen. Prov grovere opplosning eller mindre klaring.");
         return;
       }
@@ -3223,6 +3287,7 @@ async function autoPlanRoute(){
       const i = id % cols, j = Math.floor(id / cols);
       return [cellLat(j), cellLon(i)];
     });
+    // Bruk de faktiske punktene som start og slutt
     path[0] = [start.lat, start.lon];
     path[path.length-1] = [slutt.lat, slutt.lon];
 
@@ -3254,10 +3319,14 @@ async function autoPlanRoute(){
       endelig = redusert;
     }
 
-    bulkAdd = true;
-    clearRoute();
-    endelig.forEach(function(p){ addWaypoint(p[0], p[1]); });
-    bulkAdd = false;
+    // FIKS BUG 2: try/finally sikrer at bulkAdd alltid nullstilles
+    try {
+      bulkAdd = true;
+      clearRoute();
+      endelig.forEach(function(p){ addWaypoint(p[0], p[1]); });
+    } finally {
+      bulkAdd = false;
+    }
 
     const grp = L.featureGroup(waypoints.map(function(w){ return w.marker; }));
     map.fitBounds(grp.getBounds().pad(0.15));
@@ -3274,7 +3343,7 @@ async function autoPlanRoute(){
     autoProgress(100);
     autoStatus("Fant rute: " + endelig.length + " waypoints, " + ruteNM.toFixed(2) + " NM (" +
       (omvei > 0.5 ? "+"+omvei.toFixed(0)+"% mot luftlinje" : "tilnaermet rett linje") +
-      "). Beregnet pa " + sek + "s. Husk a sjekke bruer og luftspenn.");
+      "). Beregnet pa " + sek + "s." + snapNote + " Husk a sjekke bruer og luftspenn.");
 
     await calculateRoute();
     setTimeout(function(){ autoProgress(null); }, 1500);
@@ -3288,8 +3357,10 @@ async function autoPlanRoute(){
       autoStatus("Feil under ruteberegning: " + (e && e.message ? e.message : e));
     }
   } finally {
+    // FIKS BUG 2: alle flagg nullstilles uansett hvordan vi kom hit
     autoPlanning = false;
     autoPlanCancel = false;
+    bulkAdd = false;
     document.getElementById('autoPlanBtn').style.display = 'inline-block';
     document.getElementById('autoCancelBtn').style.display = 'none';
   }
@@ -3475,7 +3546,6 @@ if(vmgCheckbox){
   });
 }
 
-// Ny dypgang endrer hva som regnes som farbart - toem cache og regn pa nytt
 const draftInput = document.getElementById('draft');
 if(draftInput){
   draftInput.addEventListener('change', function(){
