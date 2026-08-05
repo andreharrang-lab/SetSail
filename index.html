@@ -294,6 +294,16 @@ Klikk på en <b>markør</b> for meny. Høyreklikk på markør sletter.<br>
 <option value="250">250 m fra land</option>
 <option value="500">500 m fra land</option>
 </select></div>
+<div class="row"><label>Bruer/spenn</label>
+<select id="autoHazardMode">
+<option value="off">Ikke sjekk</option>
+<option value="avoid" selected>Unngå for lave</option>
+<option value="strict">Unngå også ukjent høyde</option>
+</select></div>
+<div style="font-size:10px;color:#888;margin:-2px 0 5px;">
+Bruker <b>mastehøyde + sikkerhetsmargin</b> fra «Båtens mål». Dypgang styrer om grunner unngås.
+Ruta verifiseres mot høyde og dybde etter beregning.
+</div>
 <div class="row">
 <button class="ok" onclick="autoPlanRoute()" id="autoPlanBtn">🧭 Finn beste rute</button>
 <button class="warn" onclick="cancelAutoPlan()" id="autoCancelBtn" style="display:none">⏹ Avbryt</button>
@@ -2711,13 +2721,262 @@ function hazardName(tags, type){
   return 'Hinder';
 }
 
+// ===== FELLES HINDERDATA (broer, luftspenn) =====
+// Brukes bade av flisen "Hoyde og dybde langs ruta" og av den automatiske
+// ruteplanleggeren, slik at begge vurderer hindrene likt.
+const HINDER_ENDEPUNKT = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter'
+];
+
+// Straff i timer per kryssing av hinder med ukjent hoyde (modus "Unngå for lave").
+// Hoy nok til at A* velger omvei nar det finnes, lav nok til at ruta ikke blir umulig.
+const UKJENT_HINDER_STRAFF = 0.35;
+
+// Returnerer elements-lista fra Overpass, eller null hvis alle endepunkt feiler.
+// Null vs. tom liste skiller "ingen data" fra "ingen hindre".
+async function hentHinderData(minLat, minLon, maxLat, maxLon){
+  const bbox = minLat.toFixed(4)+','+minLon.toFixed(4)+','+maxLat.toFixed(4)+','+maxLon.toFixed(4);
+  const query = '[out:json][timeout:30];(' +
+    'way["seamark:type"="bridge"]('+bbox+');' +
+    'way["seamark:type"="cable_overhead"]('+bbox+');' +
+    'way["bridge"]["maxheight"]('+bbox+');' +
+    'way["man_made"="bridge"]('+bbox+');' +
+    'way["power"="line"]('+bbox+');' +
+    'way["power"="minor_line"]('+bbox+');' +
+    'way["bridge"]["highway"]('+bbox+');' +
+    'way["bridge"]["railway"]('+bbox+');' +
+    ');out geom;';
+
+  for(const ep of HINDER_ENDEPUNKT){
+    try {
+      const controller = new AbortController();
+      const tid = setTimeout(function(){ controller.abort(); }, 35000);
+      const r = await fetch(ep, {
+        method: 'POST',
+        body: 'data=' + encodeURIComponent(query),
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        signal: controller.signal
+      });
+      clearTimeout(tid);
+      if(r.ok){
+        const j = await r.json();
+        if(j && j.elements) return j.elements;
+      }
+    } catch(e){ console.warn("Overpass feilet mot "+ep+":", e.message); }
+  }
+  return null;
+}
+
+// Finner hvor OSM-objektene krysser en rute gitt som liste med [lat, lon].
+function finnHinderTreff(elements, pts){
+  const treff = [];
+  (elements || []).forEach(function(el){
+    if(!el.geometry || el.geometry.length < 2) return;
+    const type = hazardType(el.tags);
+    const clearance = parseClearance(el.tags);
+
+    for(let g = 0; g < el.geometry.length - 1; g++){
+      const g1 = [el.geometry[g].lat, el.geometry[g].lon];
+      const g2 = [el.geometry[g+1].lat, el.geometry[g+1].lon];
+      for(let s = 0; s < pts.length - 1; s++){
+        const hit = segIntersect(pts[s], pts[s+1], g1, g2);
+        if(hit){
+          const dup = treff.some(function(t){
+            return Math.abs(t.lat - hit[0]) < 0.0008 && Math.abs(t.lon - hit[1]) < 0.0008;
+          });
+          if(!dup){
+            treff.push({
+              lat: hit[0], lon: hit[1],
+              type: type,
+              navn: hazardName(el.tags, type),
+              clearance: clearance,
+              segment: s + 1,
+              tags: el.tags || {}
+            });
+          }
+          break;
+        }
+      }
+    }
+  });
+  treff.sort(function(a,b){ return a.segment - b.segment; });
+  return treff;
+}
+
+// Tegner treffene i kartet og fyller lista i flisen. Returnerer statistikk.
+function visHinderTreff(treff, mast, margin){
+  const kravHoyde = mast + margin;
+  let minKlaring = Infinity;
+  let antBad = 0, antWarn = 0, antUkjent = 0;
+  let html = '';
+
+  hazardList = treff;
+
+  treff.forEach(function(t, i){
+    let cls, ikon, tekst;
+    if(t.clearance === null){
+      cls = 'hz-unknown'; ikon = '?'; antUkjent++;
+      tekst = '<b style="color:#6c757d">Høyde ikke registrert</b>';
+    } else {
+      if(t.clearance < minKlaring) minKlaring = t.clearance;
+      if(mast <= 0){
+        cls = 'hz-ok'; ikon = t.type === 'luftspenn' ? '\u26A1' : '\uD83C\uDF09';
+        tekst = '<b>' + t.clearance.toFixed(1) + ' m</b> seilbar høyde';
+      } else if(t.clearance < kravHoyde){
+        cls = 'hz-bad'; ikon = '\u26D4'; antBad++;
+        tekst = '<b style="color:#c92a2a">' + t.clearance.toFixed(1) + ' m - FOR LAVT</b> (trenger ' + kravHoyde.toFixed(1) + ' m)';
+      } else if(t.clearance < kravHoyde + 2){
+        cls = 'hz-warn'; ikon = '\u26A0'; antWarn++;
+        tekst = '<b style="color:#fd7e14">' + t.clearance.toFixed(1) + ' m - knapt</b> (' + (t.clearance - kravHoyde).toFixed(1) + ' m til overs)';
+      } else {
+        cls = 'hz-ok'; ikon = '\u2713';
+        tekst = '<b style="color:#2b8a3e">' + t.clearance.toFixed(1) + ' m</b> (' + (t.clearance - kravHoyde).toFixed(1) + ' m klaring)';
+      }
+    }
+
+    const m = L.marker([t.lat, t.lon], {
+      icon: makeHazardIcon(ikon, cls),
+      zIndexOffset: 900
+    }).addTo(map);
+    m.bindTooltip('<b>' + t.navn + '</b> (' + t.type + ')<br>' +
+      (t.clearance !== null ? 'Seilbar høyde: ' + t.clearance.toFixed(1) + ' m' : 'Høyde ikke registrert i OSM') +
+      '<br>Etappe WP' + t.segment + ' til WP' + (t.segment+1), {sticky: true});
+    hazardMarkers.push(m);
+
+    html += '<div class="hz-row" onclick="zoomToHazard(' + i + ')">' +
+      '<b>' + t.navn + '</b> <small style="color:#888">(' + t.type + ', etappe ' + t.segment + ')</small><br>' +
+      tekst + '</div>';
+  });
+
+  setHtml('clearanceBox', html);
+
+  const mc = document.getElementById('minClearance');
+  if(mc){
+    if(minKlaring === Infinity){
+      mc.textContent = "Ukjent";
+      mc.style.color = '#6c757d';
+    } else {
+      mc.textContent = minKlaring.toFixed(1) + " m";
+      if(mast > 0 && minKlaring < kravHoyde) mc.style.color = '#c92a2a';
+      else if(mast > 0 && minKlaring < kravHoyde + 2) mc.style.color = '#fd7e14';
+      else mc.style.color = '#2b8a3e';
+    }
+  }
+
+  return {antBad: antBad, antWarn: antWarn, antUkjent: antUkjent,
+          minKlaring: minKlaring, kravHoyde: kravHoyde};
+}
+
+// Rutenett-indeks over hindersegmenter. A* gjor titusenvis av stegsjekker,
+// og en lineaer gjennomgang av alle segmentene ville vaert for tregt.
+const HINDER_CELLE = 0.01; // ca 1.1 km i bredderetning
+
+function byggHinderIndeks(elements, kravHoyde, ukjentBlokkerer){
+  const segs = [];
+  (elements || []).forEach(function(el){
+    if(!el.geometry || el.geometry.length < 2) return;
+    const type = hazardType(el.tags);
+    const clearance = parseClearance(el.tags);
+    for(let g = 0; g < el.geometry.length - 1; g++){
+      segs.push({
+        la1: el.geometry[g].lat,   lo1: el.geometry[g].lon,
+        la2: el.geometry[g+1].lat, lo2: el.geometry[g+1].lon,
+        clearance: clearance, type: type, navn: hazardName(el.tags, type)
+      });
+    }
+  });
+
+  const bins = new Map();
+  const alltid = [];
+
+  segs.forEach(function(sg, id){
+    const i1 = Math.floor(Math.min(sg.la1, sg.la2) / HINDER_CELLE);
+    const i2 = Math.floor(Math.max(sg.la1, sg.la2) / HINDER_CELLE);
+    const j1 = Math.floor(Math.min(sg.lo1, sg.lo2) / HINDER_CELLE);
+    const j2 = Math.floor(Math.max(sg.lo1, sg.lo2) / HINDER_CELLE);
+    // Svaert lange segmenter (typisk hoyspentlinjer over fjord) ville fylt
+    // hundrevis av celler. De sjekkes alltid i stedet.
+    if((i2-i1+1) * (j2-j1+1) > 400){ alltid.push(id); return; }
+    for(let i = i1; i <= i2; i++){
+      for(let j = j1; j <= j2; j++){
+        const k = i + '|' + j;
+        let arr = bins.get(k);
+        if(!arr){ arr = []; bins.set(k, arr); }
+        arr.push(id);
+      }
+    }
+  });
+
+  return {
+    antall: segs.length,
+    kravHoyde: kravHoyde,
+    ukjentBlokkerer: ukjentBlokkerer,
+    // {blokkert, ukjent, lavest} for et steg mellom to punkt
+    sjekk: function(la1, lo1, la2, lo2){
+      const kandidater = new Set(alltid);
+      const i1 = Math.floor(Math.min(la1, la2) / HINDER_CELLE);
+      const i2 = Math.floor(Math.max(la1, la2) / HINDER_CELLE);
+      const j1 = Math.floor(Math.min(lo1, lo2) / HINDER_CELLE);
+      const j2 = Math.floor(Math.max(lo1, lo2) / HINDER_CELLE);
+      for(let i = i1; i <= i2; i++){
+        for(let j = j1; j <= j2; j++){
+          const arr = bins.get(i + '|' + j);
+          if(arr) for(const id of arr) kandidater.add(id);
+        }
+      }
+
+      let blokkert = false, ukjent = 0, lavest = Infinity;
+      const a1 = [la1, lo1], a2 = [la2, lo2];
+      for(const id of kandidater){
+        const sg = segs[id];
+        if(!segIntersect(a1, a2, [sg.la1, sg.lo1], [sg.la2, sg.lo2])) continue;
+        if(sg.clearance === null){
+          ukjent++;
+          if(ukjentBlokkerer){ blokkert = true; break; }
+        } else {
+          if(sg.clearance < lavest) lavest = sg.clearance;
+          if(kravHoyde > 0 && sg.clearance < kravHoyde){ blokkert = true; break; }
+        }
+      }
+      return {blokkert: blokkert, ukjent: ukjent, lavest: lavest};
+    }
+  };
+}
+
+// Teller grunne/torrfall-piksler i sjokartet langs hver etappe.
+async function skannDybdeLangsRute(pts, onProgress){
+  const etapper = [];
+  let totalt = 0;
+  for(let i = 0; i < pts.length - 1; i++){
+    if(autoPlanCancel && autoPlanning) break;
+    const n = await countShallowAlong(pts[i][0], pts[i][1], pts[i+1][0], pts[i+1][1]);
+    if(n > 0){ etapper.push({segment: i+1, antall: n}); totalt += n; }
+    if(onProgress) onProgress(i+1, pts.length-1);
+  }
+  return {etapper: etapper, totalt: totalt};
+}
+
+function dybdeSammendrag(dybde){
+  const draft = numVal('draft', 0);
+  if(draft <= 0) return "Dypgang er ikke satt - dybde ble ikke vurdert.";
+  if(!dybde.etapper.length){
+    return "\uD83D\uDFE2 Ingen grunner eller tørrfall langs ruta i sjøkartet (dypgang " + draft.toFixed(1) + " m).";
+  }
+  const liste = dybde.etapper.map(function(e){ return "etappe " + e.segment; }).join(", ");
+  if(draftBlocksShallow()){
+    return "\uD83D\uDD36 Grunt vann markert på " + liste + " - kontroller dybden mot sjøkartet (dypgang " + draft.toFixed(1) + " m).";
+  }
+  return "\uD83D\uDD36 Grunt vann markert på " + liste + ", men dypgang " + draft.toFixed(1) + " m regnes som passerbart.";
+}
+
 async function checkClearances(){
-  if(waypoints.length < 2){ alert("Sett minst 2 waypoints forst."); return; }
+  if(waypoints.length < 2){ alert("Sett minst 2 waypoints først."); return; }
 
   const mast = numVal('mastHeight', 0);
   const margin = numVal('clearanceMargin', 1);
   if(mast <= 0){
-    if(!confirm("Mastehoyde er ikke satt. Vil du likevel liste opp broer og luftspenn langs ruta?")) return;
+    if(!confirm("Mastehøyde er ikke satt. Vil du likevel liste opp broer og luftspenn langs ruta?")) return;
   }
 
   clearHazards();
@@ -2737,148 +2996,30 @@ async function checkClearances(){
     const pad = 0.02;
     minLat -= pad; maxLat += pad; minLon -= pad; maxLon += pad;
 
-    const bbox = minLat.toFixed(4)+','+minLon.toFixed(4)+','+maxLat.toFixed(4)+','+maxLon.toFixed(4);
-    const query = '[out:json][timeout:30];(' +
-      'way["seamark:type"="bridge"]('+bbox+');' +
-      'way["seamark:type"="cable_overhead"]('+bbox+');' +
-      'way["bridge"]["maxheight"]('+bbox+');' +
-      'way["man_made"="bridge"]('+bbox+');' +
-      'way["power"="line"]('+bbox+');' +
-      'way["power"="minor_line"]('+bbox+');' +
-      'way["bridge"]["highway"]('+bbox+');' +
-      'way["bridge"]["railway"]('+bbox+');' +
-      ');out geom;';
+    const elements = await hentHinderData(minLat, minLon, maxLat, maxLon);
 
-    const endpoints = [
-      'https://overpass-api.de/api/interpreter',
-      'https://overpass.kumi.systems/api/interpreter'
-    ];
-
-    let data = null;
-    for(const ep of endpoints){
-      try {
-        const controller = new AbortController();
-        const tid = setTimeout(function(){ controller.abort(); }, 35000);
-        const r = await fetch(ep, {
-          method: 'POST',
-          body: 'data=' + encodeURIComponent(query),
-          headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-          signal: controller.signal
-        });
-        clearTimeout(tid);
-        if(r.ok){ data = await r.json(); break; }
-      } catch(e){ console.warn("Overpass feilet mot "+ep+":", e.message); }
-    }
-
-    if(!data || !data.elements){
-      setEl('clearanceStatus', "Kunne ikke hente hoydedata fra OpenStreetMap. Prov igjen senere.");
-      return;
-    }
-
-    setEl('clearanceStatus', "Analyserer " + data.elements.length + " objekter mot ruta...");
-
-    const treff = [];
-    data.elements.forEach(function(el){
-      if(!el.geometry || el.geometry.length < 2) return;
-      const type = hazardType(el.tags);
-      const clearance = parseClearance(el.tags);
-
-      for(let g = 0; g < el.geometry.length - 1; g++){
-        const g1 = [el.geometry[g].lat, el.geometry[g].lon];
-        const g2 = [el.geometry[g+1].lat, el.geometry[g+1].lon];
-        for(let s = 0; s < pts.length - 1; s++){
-          const hit = segIntersect(pts[s], pts[s+1], g1, g2);
-          if(hit){
-            const dup = treff.some(function(t){
-              return Math.abs(t.lat - hit[0]) < 0.0008 && Math.abs(t.lon - hit[1]) < 0.0008;
-            });
-            if(!dup){
-              treff.push({
-                lat: hit[0], lon: hit[1],
-                type: type,
-                navn: hazardName(el.tags, type),
-                clearance: clearance,
-                segment: s + 1,
-                tags: el.tags || {}
-              });
-            }
-            break;
-          }
-        }
-      }
-    });
-
-    if(!treff.length){
-      setEl('clearanceStatus', "Ingen registrerte broer eller luftspenn krysser ruta. NB: OpenStreetMap kan mangle data - kontroller mot sjokart.");
-      setEl('minClearance', "Ingen");
-      return;
-    }
-
-    treff.sort(function(a,b){ return a.segment - b.segment; });
-    hazardList = treff;
-
-    const kravHoyde = mast + margin;
-    let minKlaring = Infinity;
-    let antBad = 0, antWarn = 0, antUkjent = 0;
-    let html = '';
-
-    treff.forEach(function(t, i){
-      let cls, ikon, tekst;
-      if(t.clearance === null){
-        cls = 'hz-unknown'; ikon = '?'; antUkjent++;
-        tekst = '<b style="color:#6c757d">Hoyde ikke registrert</b>';
+    let hoydeTekst;
+    if(!elements){
+      hoydeTekst = "\u26A0 Kunne ikke hente høydedata fra OpenStreetMap - høyde er IKKE sjekket.";
+      setEl('minClearance', "-");
+    } else {
+      setEl('clearanceStatus', "Analyserer " + elements.length + " objekter mot ruta...");
+      const treff = finnHinderTreff(elements, pts);
+      if(!treff.length){
+        setEl('minClearance', "Ingen");
+        hoydeTekst = "Ingen registrerte broer eller luftspenn krysser ruta.";
       } else {
-        if(t.clearance < minKlaring) minKlaring = t.clearance;
-        if(mast <= 0){
-          cls = 'hz-ok'; ikon = t.type === 'luftspenn' ? '\u26A1' : '\uD83C\uDF09';
-          tekst = '<b>' + t.clearance.toFixed(1) + ' m</b> seilbar hoyde';
-        } else if(t.clearance < kravHoyde){
-          cls = 'hz-bad'; ikon = '\u26D4'; antBad++;
-          tekst = '<b style="color:#c92a2a">' + t.clearance.toFixed(1) + ' m - FOR LAVT</b> (trenger ' + kravHoyde.toFixed(1) + ' m)';
-        } else if(t.clearance < kravHoyde + 2){
-          cls = 'hz-warn'; ikon = '\u26A0'; antWarn++;
-          tekst = '<b style="color:#fd7e14">' + t.clearance.toFixed(1) + ' m - knapt</b> (' + (t.clearance - kravHoyde).toFixed(1) + ' m til overs)';
-        } else {
-          cls = 'hz-ok'; ikon = '\u2713';
-          tekst = '<b style="color:#2b8a3e">' + t.clearance.toFixed(1) + ' m</b> (' + (t.clearance - kravHoyde).toFixed(1) + ' m klaring)';
-        }
-      }
-
-      const m = L.marker([t.lat, t.lon], {
-        icon: makeHazardIcon(ikon, cls),
-        zIndexOffset: 900
-      }).addTo(map);
-      m.bindTooltip('<b>' + t.navn + '</b> (' + t.type + ')<br>' +
-        (t.clearance !== null ? 'Seilbar hoyde: ' + t.clearance.toFixed(1) + ' m' : 'Hoyde ikke registrert i OSM') +
-        '<br>Etappe WP' + t.segment + ' til WP' + (t.segment+1), {sticky: true});
-      hazardMarkers.push(m);
-
-      html += '<div class="hz-row" onclick="zoomToHazard(' + i + ')">' +
-        '<b>' + t.navn + '</b> <small style="color:#888">(' + t.type + ', etappe ' + t.segment + ')</small><br>' +
-        tekst + '</div>';
-    });
-
-    setHtml('clearanceBox', html);
-
-    const mc = document.getElementById('minClearance');
-    if(mc){
-      if(minKlaring === Infinity){
-        mc.textContent = "Ukjent";
-        mc.style.color = '#6c757d';
-      } else {
-        mc.textContent = minKlaring.toFixed(1) + " m";
-        if(mast > 0 && minKlaring < kravHoyde) mc.style.color = '#c92a2a';
-        else if(mast > 0 && minKlaring < kravHoyde + 2) mc.style.color = '#fd7e14';
-        else mc.style.color = '#2b8a3e';
+        const st = visHinderTreff(treff, mast, margin);
+        hoydeTekst = "Fant " + treff.length + " kryssende objekt" + (treff.length > 1 ? "er" : "") + ". ";
+        if(st.antBad > 0) hoydeTekst += "\u26D4 " + st.antBad + " for lavt for masta! ";
+        if(st.antWarn > 0) hoydeTekst += "\u26A0 " + st.antWarn + " knapt. ";
+        if(st.antUkjent > 0) hoydeTekst += "\u26AA " + st.antUkjent + " uten høydedata. ";
       }
     }
 
-    let status = "Fant " + treff.length + " kryssende objekt" + (treff.length>1?"er":"") + ". ";
-    if(antBad > 0) status += "\u26D4 " + antBad + " for lavt for masta! ";
-    if(antWarn > 0) status += "\u26A0 " + antWarn + " knapt. ";
-    if(antUkjent > 0) status += "\u26AA " + antUkjent + " uten hoydedata. ";
-    status += "Kontroller mot sjokart.";
-    setEl('clearanceStatus', status);
+    setEl('clearanceStatus', hoydeTekst + " Skanner dybde langs ruta...");
+    const dybde = await skannDybdeLangsRute(pts);
+    setEl('clearanceStatus', hoydeTekst + " " + dybdeSammendrag(dybde) + " Kontroller alltid mot sjøkart.");
 
   } catch(e){
     console.error("Klaringssjekk feilet:", e);
@@ -2887,6 +3028,7 @@ async function checkClearances(){
     if(btn) btn.disabled = false;
   }
 }
+
 
 function zoomToHazard(i){
   if(i < 0 || i >= hazardList.length) return;
@@ -3105,6 +3247,14 @@ async function autoPlanRoute(){
     const marginM = numVal('autoMargin', 0);
     const resN = parseInt(document.getElementById('autoRes').value) || 55;
 
+    // Hoyde- og dybdekrav hentes fra "Batens mal", samme verdier som flisen bruker.
+    const hazardEl = document.getElementById('autoHazardMode');
+    const hazardValg = hazardEl ? hazardEl.value : 'off';
+    const mastHoyde = numVal('mastHeight', 0);
+    const sikMargin = numVal('clearanceMargin', 1);
+    const kravHoyde = mastHoyde > 0 ? mastHoyde + sikMargin : 0;
+    let hinderIdx = null, hinderElementer = null, hinderNote = "";
+
     if(isMotorMode && motorSpd <= 0){
       autoProgress(null);
       alert("Sett en motorfart forst.");
@@ -3134,6 +3284,25 @@ async function autoPlanRoute(){
     const departure = depInput ? new Date(depInput) : new Date();
     const windSamples = await sampleWindGrid(minLat, minLon, maxLat, maxLon, departure);
     if(autoPlanCancel) throw new Error("avbrutt");
+
+    // Hindersjekk: hentes for hele sokeomradet FOR A*, slik at ruta unngar
+    // for lave broer og luftspenn i stedet for a oppdage dem etterpa.
+    if(hazardValg !== 'off'){
+      if(mastHoyde <= 0){
+        hinderNote = " Mastehøyde er 0 - høydesjekk ble hoppet over.";
+      } else {
+        autoStatus("Henter bruer og luftspenn fra OpenStreetMap...");
+        hinderElementer = await hentHinderData(minLat, minLon, maxLat, maxLon);
+        if(autoPlanCancel) throw new Error("avbrutt");
+        if(!hinderElementer){
+          hinderNote = " \u26A0 Fikk ikke hentet bro-/spenndata - ruta er IKKE høydesjekket.";
+        } else {
+          hinderIdx = byggHinderIndeks(hinderElementer, kravHoyde, hazardValg === 'strict');
+          console.log("Ruteplanlegger: " + hinderIdx.antall + " hindersegmenter, krav " +
+            kravHoyde.toFixed(1) + " m, ukjent hoyde " + (hazardValg === 'strict' ? "blokkerer" : "straffes"));
+        }
+      }
+    }
 
     const cellLat = function(j){ return minLat + (j + 0.5) * (maxLat - minLat) / rows; };
     const cellLon = function(i){ return minLon + (i + 0.5) * (maxLon - minLon) / cols; };
@@ -3243,7 +3412,8 @@ async function autoPlanRoute(){
       expansions++;
       if(expansions > maxExpansions){
         autoProgress(null);
-        autoStatus("Fant ingen farbar rute innenfor sokegrensen. Prov grovere opplosning eller mindre klaring.");
+        autoStatus("Fant ingen farbar rute innenfor søkegrensen. Prøv grovere oppløsning eller mindre klaring." +
+          (hinderIdx ? " Høydekravet på " + kravHoyde.toFixed(1) + " m kan også sperre eneste passasje - prøv «Ikke sjekk» under Bruer/spenn." : ""));
         return;
       }
 
@@ -3271,7 +3441,16 @@ async function autoPlanRoute(){
         // Midtpunktsjekk halverer dette blindfeltet.
         if(await isLand((cla+nla)/2, (clo+nlo)/2)) continue;
 
-        const tentative = gScore[node.id] + stepCost(cla, clo, nla, nlo);
+        // Hoydesjekk pa steget: for lave broer/spenn er ufremkommelige,
+        // ukjent hoyde far en tidsstraff sa A* velger omvei nar det finnes en.
+        let hinderStraff = 0;
+        if(hinderIdx){
+          const hz = hinderIdx.sjekk(cla, clo, nla, nlo);
+          if(hz.blokkert) continue;
+          if(hz.ukjent > 0) hinderStraff = hz.ukjent * UKJENT_HINDER_STRAFF;
+        }
+
+        const tentative = gScore[node.id] + stepCost(cla, clo, nla, nlo) + hinderStraff;
         if(tentative < gScore[nid]){
           gScore[nid] = tentative;
           cameFrom[nid] = node.id;
@@ -3282,7 +3461,8 @@ async function autoPlanRoute(){
 
     if(!found){
       autoProgress(null);
-      autoStatus("Fant ingen farbar rute. Prov mindre klaring, grovere opplosning, eller legg inn et mellom-waypoint manuelt.");
+      autoStatus("Fant ingen farbar rute. Prøv mindre klaring, grovere oppløsning, eller legg inn et mellom-waypoint manuelt." +
+        (hinderIdx ? " Merk at broer/luftspenn under " + kravHoyde.toFixed(1) + " m er utelukket." : ""));
       return;
     }
 
@@ -3315,6 +3495,7 @@ async function autoPlanRoute(){
       let best = idx + 1;
       const maxLook = Math.min(path.length - 1, idx + 40);
       for(let j = maxLook; j > idx + 1; j--){
+        if(hinderIdx && hinderIdx.sjekk(path[idx][0], path[idx][1], path[j][0], path[j][1]).blokkert) continue;
         const ok = await lineClearWithMargin(path[idx][0], path[idx][1], path[j][0], path[j][1], marginM);
         if(ok){ best = j; break; }
       }
@@ -3360,16 +3541,58 @@ async function autoPlanRoute(){
       if(await lineCrossesLand(endelig[i][0], endelig[i][1], endelig[i+1][0], endelig[i+1][1])) ufarbare++;
     }
 
-    autoProgress(100);
-    if(ufarbare > 0){
-      autoStatus("\u26A0 Fant rute pa " + ruteNM.toFixed(2) + " NM, men " + ufarbare + " etappe" +
-        (ufarbare>1?"r":"") + " krysser fortsatt land eller grunne (vises rodt i kartet). " +
-        "Prov finere opplosning, eller klikk pa den rode linja for a sette inn waypoint manuelt." + snapNote);
-    } else {
-      autoStatus("Fant farbar rute: " + endelig.length + " waypoints, " + ruteNM.toFixed(2) + " NM (" +
-        (omvei > 0.5 ? "+"+omvei.toFixed(0)+"% mot luftlinje" : "tilnaermet rett linje") +
-        "). Beregnet pa " + sek + "s." + snapNote + " Husk a sjekke bruer og luftspenn.");
+    // Sluttkontroll av hoyde og dybde langs den ferdige ruta. Samme rutiner som
+    // flisen "Hoyde og dybde langs ruta" bruker, slik at flisen fylles ut automatisk.
+    autoStatus("Verifiserer høyde og dybde langs ruta...");
+    let hoydeStatus = "", dybdeStatus = "";
+    try {
+      if(hinderElementer){
+        const treff = finnHinderTreff(hinderElementer, endelig);
+        if(!treff.length){
+          setEl('minClearance', "Ingen");
+          hoydeStatus = "\uD83D\uDFE2 Ingen broer eller luftspenn krysser ruta.";
+        } else {
+          const st = visHinderTreff(treff, mastHoyde, sikMargin);
+          if(st.antBad > 0){
+            hoydeStatus = "\u26D4 " + st.antBad + " kryssing" + (st.antBad > 1 ? "er" : "") +
+              " er for lav" + (st.antBad > 1 ? "e" : "") + " for masta (krav " + kravHoyde.toFixed(1) + " m)!";
+          } else if(st.antWarn > 0){
+            hoydeStatus = "\u26A0 " + st.antWarn + " kryssing" + (st.antWarn > 1 ? "er" : "") + " med knapp klaring.";
+          } else {
+            hoydeStatus = "\uD83D\uDFE2 " + treff.length + " kryssing" + (treff.length > 1 ? "er" : "") + " med god klaring.";
+          }
+          if(st.antUkjent > 0) hoydeStatus += " \u26AA " + st.antUkjent + " uten registrert høyde - kontroller mot sjøkart.";
+        }
+      } else if(hazardValg === 'off'){
+        hoydeStatus = "Høydesjekk er slått av.";
+      }
+
+      const dybde = await skannDybdeLangsRute(endelig);
+      dybdeStatus = dybdeSammendrag(dybde);
+
+      const flisTekst = (hoydeStatus || "Høyde ikke sjekket.") + " " + dybdeStatus +
+        " (automatisk sjekk fra ruteplanleggeren)";
+      setEl('clearanceStatus', flisTekst);
+    } catch(e){
+      console.warn("Hoyde-/dybdeverifisering feilet:", e);
+      hoydeStatus = "\u26A0 Høyde-/dybdeverifisering feilet - sjekk manuelt.";
     }
+
+    autoProgress(100);
+    let sluttTekst;
+    if(ufarbare > 0){
+      sluttTekst = "\u26A0 Fant rute på " + ruteNM.toFixed(2) + " NM, men " + ufarbare + " etappe" +
+        (ufarbare>1?"r":"") + " krysser fortsatt land eller grunne (vises rødt i kartet). " +
+        "Prøv finere oppløsning, eller klikk på den røde linja for å sette inn waypoint manuelt.";
+    } else {
+      sluttTekst = "Fant farbar rute: " + endelig.length + " waypoints, " + ruteNM.toFixed(2) + " NM (" +
+        (omvei > 0.5 ? "+"+omvei.toFixed(0)+"% mot luftlinje" : "tilnærmet rett linje") +
+        "). Beregnet på " + sek + "s.";
+    }
+    sluttTekst += snapNote + hinderNote;
+    if(hoydeStatus) sluttTekst += " " + hoydeStatus;
+    if(dybdeStatus) sluttTekst += " " + dybdeStatus;
+    autoStatus(sluttTekst);
 
     await calculateRoute();
     setTimeout(function(){ autoProgress(null); }, 1500);
