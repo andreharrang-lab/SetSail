@@ -8,7 +8,7 @@ Update 04.08.2026:
 * Possible to add new waypoints between two already existing waypoints.
 * Live GPS tracking on top of your route.
 * Share your favourites spots, and routes.
-* Automatically calulation of route between two waypoints or favorites
+* Automatically calulation of route between two waypoints or favorites (This now includes bridge height and shallow water based on your wessel stats that you have put in)
 
 
 ## ✨ Features
