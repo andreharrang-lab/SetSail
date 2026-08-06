@@ -1300,8 +1300,12 @@ async function isLandKartverket(lat, lon, blockShallow){
   }
 
   const avoidCount = counts.land + counts.tidal + (blockShallow ? counts.shallow : 0);
-  const safeCount = counts.sea_deep + counts.medium_sea + (blockShallow ? 0 : counts.shallow);
-  return avoidCount >= 2 || (avoidCount > safeCount && counts.unknown < 4);
+  // Krever minst 2 av 5 piksler. Den gamle regelen hadde et andre ledd
+  // (avoidCount > safeCount && unknown < 4) som slo til allerede ved EN
+  // enkelt piksel, sa lenge ingen var trygge. Magenta kartsymboler -
+  // dumpefelt, kabelmerking, verneomrader - klassifiseres som "unknown",
+  // og utlоste dermed falske treff midt i apent farvann.
+  return avoidCount >= 2;
 }
 
 async function isLand(lat, lon){
@@ -1370,12 +1374,17 @@ function sampleCount(distNM, stepNM, minN, maxN){
   return Math.max(minN, Math.min(maxN, Math.ceil(distNM / stepNM)));
 }
 
-async function lineCrossesLandStrict(la1, lo1, la2, lo2){
+async function lineCrossesLandStrict(la1, lo1, la2, lo2, marginM){
   const distNM = haversineNM(la1, lo1, la2, lo2);
   const numSamples = sampleCount(distNM, 0.08, 6, 200);
   const courseRad = bearing(la1, lo1, la2, lo2) * Math.PI / 180;
   const perpRad = courseRad + Math.PI/2;
-  const marginDeg = 0.3 / 60;
+  // Sidemarginen folger na brukerens klaringsvalg. Den var hardkodet til
+  // 0.3 NM = 556 m, altsa 1,1 km krav til fri bredde per slagben.
+  const brukM = (marginM === undefined || marginM === null)
+    ? Math.max(50, numVal('autoMargin', 100))
+    : Math.max(0, marginM);
+  const marginDeg = (brukM / 1852) / 60;
 
   for(let s = 1; s < numSamples; s++){
     const t = s / numSamples;
@@ -1392,17 +1401,51 @@ async function lineCrossesLandStrict(la1, lo1, la2, lo2){
   return false;
 }
 
-async function lineCrossesLand(la1, lo1, la2, lo2){
+// Antall PAFOLGENDE kontrollpunkter som ma sla ut for at en etappe
+// regnes som sperret. 2 punkter = ca 93 m sammenhengende hinder.
+const LAND_MIN_RUN = 2;
+
+// Undersoker en etappe og returnerer detaljer, ikke bare ja/nei.
+// Et enkelt utslag er statistisk stoy - se kommentaren over.
+async function landkrysningDetalj(la1, lo1, la2, lo2, minRun){
+  const krav = Math.max(1, minRun || 1);
   const distNM = haversineNM(la1, lo1, la2, lo2);
   // 0.05 NM = ca 93 m mellom hvert kontrollpunkt, uansett etappelengde.
   const numSamples = sampleCount(distNM, 0.05, 6, 400);
+  const stegM = (distNM / numSamples) * 1852;
+
+  let run = 0, lengsteRun = 0, antallTreff = 0;
+  let runStartLa = null, runStartLo = null;
+  let funnetLa = null, funnetLo = null;
+
   for(let s = 0; s <= numSamples; s++){
     const t = s / numSamples;
     const cLa = la1 + (la2 - la1) * t;
     const cLo = lo1 + (lo2 - lo1) * t;
-    if(await isLand(cLa, cLo)) return true;
+    if(await isLand(cLa, cLo)){
+      antallTreff++;
+      if(run === 0){ runStartLa = cLa; runStartLo = cLo; }
+      run++;
+      if(run > lengsteRun) lengsteRun = run;
+      if(run >= krav && funnetLa === null){ funnetLa = runStartLa; funnetLo = runStartLo; }
+    } else {
+      run = 0;
+    }
   }
-  return false;
+
+  return {
+    krysser: lengsteRun >= krav,
+    antallTreff: antallTreff,
+    lengsteRun: lengsteRun,
+    totaltPunkter: numSamples + 1,
+    lat: funnetLa, lon: funnetLo,
+    breddeM: lengsteRun * stegM
+  };
+}
+
+async function lineCrossesLand(la1, lo1, la2, lo2){
+  const d = await landkrysningDetalj(la1, lo1, la2, lo2, LAND_MIN_RUN);
+  return d.krysser;
 }
 
 async function lineClearWithMargin(la1, lo1, la2, lo2, marginM){
@@ -1543,6 +1586,7 @@ function evaluateJibeAdvantage(twaDirect, twsMs, motorSpd, minSailSpd, segmentDi
 
 async function calculateZigzagPath(startLa, startLo, endLa, endLo, angleOff, segCourse){
   const segDistNM = haversineNM(startLa, startLo, endLa, endLo);
+  const sideMarginM = Math.max(50, numVal('autoMargin', 100));
 
   async function tryPattern(numLegs, startWithFirstAngle){
     const points = [[startLa, startLo]];
@@ -1568,7 +1612,7 @@ async function calculateZigzagPath(startLa, startLo, endLa, endLo, angleOff, seg
         if(onLand) return null;
       }
 
-      const crosses = await lineCrossesLandStrict(currentLa, currentLo, nextLa, nextLo);
+      const crosses = await lineCrossesLandStrict(currentLa, currentLo, nextLa, nextLo, sideMarginM);
       if(crosses) return null;
 
       points.push([nextLa, nextLo]);
@@ -1621,12 +1665,18 @@ async function calculateRoute(){
 
     const landWarnings = await checkWaypointsOnLand();
     const segmentWarnings = [];
+    // Resultatet lagres og gjenbrukes nar linjene tegnes, slik at hver
+    // etappe bare analyseres en gang.
+    const segKryss = [];
 
     for(let r = 0; r < waypoints.length - 1; r++){
       const w1 = waypoints[r].marker.getLatLng();
       const w2 = waypoints[r+1].marker.getLatLng();
-      if(await lineCrossesLand(w1.lat, w1.lng, w2.lat, w2.lng)){
-        segmentWarnings.push("WP"+(r+1)+"-WP"+(r+2));
+      const d = await landkrysningDetalj(w1.lat, w1.lng, w2.lat, w2.lng, LAND_MIN_RUN);
+      segKryss.push(d);
+      if(d.krysser){
+        segmentWarnings.push("WP"+(r+1)+"-WP"+(r+2)+
+          (d.lat !== null ? " (ved "+d.lat.toFixed(4)+", "+d.lon.toFixed(4)+")" : ""));
       }
     }
 
@@ -1649,7 +1699,8 @@ async function calculateRoute(){
     const routeSegments = [];
     const segColors = [];
     for(let r = 0; r < pts.length - 1; r++){
-      const crossesLand = await lineCrossesLand(pts[r][0], pts[r][1], pts[r+1][0], pts[r+1][1]);
+      const kryssD = segKryss[r] || {krysser: false, breddeM: 0, antallTreff: 0, totaltPunkter: 0};
+      const crossesLand = kryssD.krysser;
       const segColor = crossesLand ? '#c92a2a' : '#2b8a3e';
       segColors.push(segColor);
       const segWeight = crossesLand ? 5 : 4;
@@ -1667,8 +1718,12 @@ async function calculateRoute(){
       })(r);
 
       const tipBase = crossesLand
-        ? 'ADVARSEL: Linja WP'+(r+1)+' til WP'+(r+2)+' krysser land eller grunne!<br>'
-        : '';
+        ? 'ADVARSEL: Linja WP'+(r+1)+' til WP'+(r+2)+' krysser land eller grunne!<br>'+
+          'Sammenhengende hinder ca. '+kryssD.breddeM.toFixed(0)+' m'+
+          (kryssD.lat !== null ? ' ved '+kryssD.lat.toFixed(4)+', '+kryssD.lon.toFixed(4) : '')+'<br>'
+        : (kryssD.antallTreff > 0
+            ? kryssD.antallTreff+' av '+kryssD.totaltPunkter+' kontrollpunkter slo ut, men ikke sammenhengende - regnes som farbart.<br>'
+            : '');
       segLine.bindTooltip(tipBase + 'Klikk for a sette inn nytt waypoint her', {sticky: true});
       if(crossesLand) console.warn("WP"+(r+1)+"-WP"+(r+2)+" krysser land/grunne!");
 
@@ -1811,6 +1866,7 @@ async function calculateRoute(){
       const minAngleForDisplay = 10;
       const showVmgEl = document.getElementById('showVmgPaths');
       const showVmg = showVmgEl ? showVmgEl.checked : false;
+      let zigzagNote = "";
 
       if(jibeAdvice && showVmg && parseFloat(jibeAdvice.angleOff) >= minAngleForDisplay){
         const startLa = pts[i][0], startLo = pts[i][1];
@@ -1843,9 +1899,21 @@ async function calculateRoute(){
             vmgLines.push(marker);
           }
         } else {
-          const warnMarker = L.circleMarker([startLa, startLo], {
-            radius: 8, color: '#fd7e14', fillColor: '#fff', fillOpacity: 1, weight: 2.5
-          }).bindTooltip(jibeAdvice.type.toUpperCase()+' anbefales men landunngaelse mislyktes. Sett inn mellom-waypoint manuelt.', {sticky: true}).addTo(map);
+          const sideM = Math.max(50, numVal('autoMargin', 100));
+          zigzagNote = '<div style="background:#ffe8cc;padding:4px;border-radius:3px;margin:4px 0;font-size:11px;">' +
+            '\u26A0 <b>' + jibeAdvice.type + " kan ikke tegnes:</b> banen far ikke plass med " +
+            sideM.toFixed(0) + ' m klaring til hver side. Farvannet er for trangt - ' +
+            'seil etter eget skjonn, eller senk Klaring i ruteplanleggeren.</div>';
+          const warnMarker = L.marker([startLa, startLo], {
+            icon: L.divIcon({
+              className: "",
+              html: '<div class="seg-label" style="border:1px solid #fd7e14;color:#fd7e14;">\u26A0 ' +
+                    jibeAdvice.type + ' far ikke plass</div>',
+              iconSize: [150, 20], iconAnchor: [75, -8]
+            })
+          }).bindTooltip(jibeAdvice.type.toUpperCase() + ' anbefales, men slagbanen krever ' +
+            sideM.toFixed(0) + ' m fri bredde til hver side og treffer land eller grunne.',
+            {sticky: true}).addTo(map);
           vmgLines.push(warnMarker);
         }
       }
@@ -1910,6 +1978,7 @@ async function calculateRoute(){
         )+
         'Distanse: '+etappeNM.toFixed(2)+' NM | Snittfart: <b>'+avgSog.toFixed(1)+' kn</b> | Maks bolge: '+waveStr+'<br>'+
         shallowNote+
+        zigzagNote+
         (jibeAdvice ? '<div style="background:#fff3cd;padding:4px;border-radius:3px;margin:4px 0;font-size:11px;"><b>'+jibeAdvice.type+'-tips:</b> Seil i Z-monster med TWA '+jibeAdvice.bestTWA+' grader - <b style="color:#2b8a3e">sparer '+jibeAdvice.savedMin+' min ('+jibeAdvice.gainPct+'% raskere)</b><br>Direkte: '+jibeAdvice.directSpeed+' kn. Taktisk: '+jibeAdvice.optimalSpeed+' kn ('+jibeAdvice.extraDistancePct+'% lengre)</div>' : '')+
         modeStr+'<br>'+
         'Tid: '+fmtT(etappeH)+' (uten strom: '+fmtT(etappeHnoCur)+') '+currStr+'</div>';
@@ -3493,13 +3562,21 @@ async function autoPlanRoute(){
     autoStatus("Forenkler ruta...");
     await new Promise(function(r){ setTimeout(r, 0); });
 
+    // Lookahead er na avstandsbasert. Med 40 faste celler rakk vinduet
+    // 20 km med grove celler, men bare 4 km med fine - og da ble et
+    // unodvendig waypoint staende igjen midt pa en rett strekning.
+    const lookaheadNM = Math.max(3, Math.min(60, directNM * 0.5));
+    const maksSteg = Math.max(20, Math.min(400,
+      Math.ceil(lookaheadNM / Math.max(0.05, cellNM))));
+
     const simplified = [path[0]];
     let idx = 0;
     while(idx < path.length - 1){
       if(autoPlanCancel) throw new Error("avbrutt");
       let best = idx + 1;
-      const maxLook = Math.min(path.length - 1, idx + 40);
+      const maxLook = Math.min(path.length - 1, idx + maksSteg);
       for(let j = maxLook; j > idx + 1; j--){
+        if(haversineNM(path[idx][0], path[idx][1], path[j][0], path[j][1]) > lookaheadNM) continue;
         // En snarvei ma ogsa respektere sperrene, ellers kan forenklingen
         // legge ruta rett over den lave brua vi nettopp rutet utenom.
         if(krysserSperre(path[idx][0], path[idx][1], path[j][0], path[j][1], sperrer)) continue;
@@ -3511,16 +3588,44 @@ async function autoPlanRoute(){
     }
 
     let endelig = simplified;
-    if(endelig.length > 30){
-      const steg = Math.ceil(endelig.length / 29);
-      const redusert = endelig.filter(function(p, i){ return i % steg === 0; });
-      if(redusert[redusert.length-1] !== endelig[endelig.length-1]){
-        redusert.push(endelig[endelig.length-1]);
+
+    // Oppryddingsrunde: fjern ethvert mellompunkt der linja fra forrige
+    // til neste punkt er farbar i seg selv. Det er nettopp dette
+    // tilfellet der et waypoint ble staende midt pa en rett strekning.
+    let fjernetIRunde;
+    do {
+      fjernetIRunde = 0;
+      for(let i = 1; i < endelig.length - 1; ){
+        if(autoPlanCancel) throw new Error("avbrutt");
+        const a = endelig[i-1], c = endelig[i+1];
+        let kanFjernes = !krysserSperre(a[0], a[1], c[0], c[1], sperrer);
+        if(kanFjernes){
+          kanFjernes = await lineClearWithMargin(a[0], a[1], c[0], c[1], marginM);
+        }
+        if(kanFjernes){ endelig.splice(i, 1); fjernetIRunde++; }
+        else { i++; }
       }
-      endelig = redusert;
+    } while(fjernetIRunde > 0 && endelig.length > 2);
+
+    // Er det fortsatt for mange punkter, fjernes de som koster minst i
+    // ekstra distanse - aldri mekanisk hvert n-te punkt. Alt som er
+    // igjen etter oppryddingen trengs, sa dette telles og rapporteres.
+    let tvangsfjernet = 0;
+    while(endelig.length > 30){
+      let bestI = -1, bestKost = Infinity;
+      for(let i = 1; i < endelig.length - 1; i++){
+        const a = endelig[i-1], b = endelig[i], c = endelig[i+1];
+        const kost = haversineNM(a[0],a[1],b[0],b[1])
+                   + haversineNM(b[0],b[1],c[0],c[1])
+                   - haversineNM(a[0],a[1],c[0],c[1]);
+        if(kost < bestKost){ bestKost = kost; bestI = i; }
+      }
+      if(bestI < 0) break;
+      endelig.splice(bestI, 1);
+      tvangsfjernet++;
     }
 
-    return {ok: true, endelig: endelig};
+    return {ok: true, endelig: endelig, tvangsfjernet: tvangsfjernet};
     }  // slutt sokRute
 
     // Rad om hva brukeren kan gjore nar ingen rute finnes.
@@ -3566,6 +3671,7 @@ async function autoPlanRoute(){
     let forsok = 0;
     let omrutinger = 0;
     let sisteHindring = "";
+    let sisteTvangsfjernet = 0;
 
     while(forsok < MAKS_FORSOK){
       forsok++;
@@ -3605,6 +3711,7 @@ async function autoPlanRoute(){
       }
 
       endelig = res.endelig;
+      sisteTvangsfjernet = res.tvangsfjernet || 0;
 
       // Ingen mastehoyde satt: da er det ingenting a rute rundt.
       if(mastHoyde <= 0) break;
@@ -3692,6 +3799,11 @@ async function autoPlanRoute(){
     if(nedskalert){
       omrutingTekst += " \u2139\uFE0F Cellene ble grovnet til " + faktiskCelleM.toFixed(0) +
         " m fordi omradet er stort - trange sund kan ha blitt utelatt.";
+    }
+    if(sisteTvangsfjernet > 0){
+      omrutingTekst += " \u26A0 " + sisteTvangsfjernet + " waypoint" +
+        (sisteTvangsfjernet > 1 ? "s" : "") + " matte fjernes for a holde ruta under 30 punkter - " +
+        "kontroller de nye rette strekkene mot sjokartet.";
     }
 
     autoProgress(100);
