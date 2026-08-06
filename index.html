@@ -150,6 +150,18 @@ body.sidebar-hidden #map{width:100%}
       <li><b>Sett avgangstidspunkt</b>, motorfart, mastehøyde og dypgang</li>
       <li><b>Klikk Beregn</b> - få full analyse</li>
     </ol>
+    <h3 style="color:#0b3d66">🌊 Tidevann</h3>
+    <p>Vannstand hentes fra Kartverket for det tidspunktet båten faktisk passerer
+    hvert hinder, og brukes til å justere både brohøyde og dybdekrav.</p>
+    <ul style="line-height:1.8">
+      <li><b>Brohøyde</b>: Norske sjøkart oppgir seilingshøyde over HAT (høyeste
+          astronomiske tidevann). Ligger vannet lavere ved passering, får du
+          tilsvarende <i>mer</i> klaring enn oppgitt</li>
+      <li><b>Dybde</b>: Sjøkartets dybdetall gjelder ved sjøkartnull. Positiv
+          vannstand gir mer vann under kjølen</li>
+      <li><b>Referansenivå</b>: Velg hva brohøyden er målt fra. Er du usikker på
+          OSM-dataene, velg «Ikke juster» - da brukes oppgitt høyde som den er</li>
+    </ul>
     <h3 style="color:#0b3d66">🌉 Mastehøyde og dypgang</h3>
     <p>Fyll inn båtens mastehøyde over vannlinjen og dypgang i seksjonen
     Reisetidspunkt og fart. Klikk deretter <b>Sjekk bruer og kraftlinjer</b>.</p>
@@ -212,6 +224,10 @@ body.sidebar-hidden #map{width:100%}
     <ul style="line-height:1.8">
       <li>🚤 <b>Ikke en erstatning for offisielle sjøkart eller GPS</b></li>
       <li>🌉 Høydedata er dugnadsdata og kan mangle eller være feil</li>
+      <li>⚓ <b>Avstand mellom brukar sjekkes aldri</b> - appen kjenner bare seilbar høyde,
+          ikke bredden på seiløpet. Finn alltid gjennomseilingsåpningen på sjøkartet</li>
+      <li>🌊 <b>Tidevannsjustering forutsetter riktig referansenivå.</b> OSM-høyder mangler
+          ofte opplysning om hva de er målt fra. Velger du feil, blir korreksjonen feil vei</li>
       <li>🧭 Automatisk rute er et forslag - kontroller alltid mot sjøkart</li>
       <li>📊 Polardata er estimat - bruk ORC-sertifikat for nøyaktighet</li>
       <li>🌬 Vind- og strømdata kan være forsinket eller mangle</li>
@@ -328,6 +344,17 @@ den kan finne. Store områder med fine celler tar lang tid.
 <div class="row"><label>Mastehøyde m</label><input type="number" id="mastHeight" placeholder="0 = ikke sjekk" step="0.1" min="0" value="0"></div>
 <div class="row"><label>Dypgang m</label><input type="number" id="draft" placeholder="0 = ikke sjekk" step="0.1" min="0" value="1.8"></div>
 <div class="row"><label>Sikkerhetsmargin m</label><input type="number" id="clearanceMargin" value="1" step="0.5" min="0"></div>
+<div class="row"><label>Brohøyde målt fra</label>
+<select id="tideRef">
+<option value="hat" selected>HAT - høyvann (sjøkartstandard)</option>
+<option value="msl">Middelvann (MSL)</option>
+<option value="cd">Sjøkartnull (LAT)</option>
+<option value="off">Ikke juster for tidevann</option>
+</select></div>
+<div style="font-size:10px;color:#888;margin:-2px 0 4px;">
+Norske sjøkart oppgir seilingshøyde over HAT. OSM-data kan avvike -
+velg «Ikke juster» hvis du er usikker.
+</div>
 <div style="font-size:10px;color:#888">Mastehøyde over vannlinjen. Dypgang ≥ 1,0 m gjør at ruta unngår grunner.</div>
 </div>
 <div style="font-size:11px;color:#555" class="hide-in-motor-mode">Motor starter automatisk hvis seilfart under min.</div>
@@ -521,6 +548,9 @@ function numVal(id, fallback){
 
 let calculatingRoute = false;
 let bulkAdd = false;
+// Start- og sluttidspunkt per etappe fra siste ruteberegning.
+// Klaringssjekken bruker dette til aa finne vannstand ved passering.
+let sisteSegmentTider = [];
 
 function toggleSidebar(){
   const isHidden = document.body.classList.toggle('sidebar-hidden');
@@ -1228,6 +1258,23 @@ async function getWavesAt(lat, lon, dateObj){
 
 // ===== LAND- OG GRUNNEDETEKSJON =====
 function classifyKartverketPixel(r, g, b){
+  // Kartsymboler forst - ellers stjeler terrengreglene dem.
+  // Fyrlyktsektorer (gul, gronn, rod), magenta markeringer og
+  // kabel-/dumpefeltgrenser er tegnet i mettede farger. Terrengfyll
+  // (land, tidevann, grunt, dypt) er alltid bleke.
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+  const kroma = mx - mn;
+  if(kroma > 100 && !(r < 100 && g < 100 && b < 100)){
+    // Gul/oransje sektor: rod og gronn hoy, bla lav
+    if(b === mn && r > 150 && g > 110) return 'symbol';
+    // Gronn sektor: gronn dominerer klart
+    if(g === mx && (g - r) > 55 && (g - b) > 40) return 'symbol';
+    // Magenta/lilla: rod og bla hoy, gronn lav
+    if(g === mn && (r - g) > 70 && (b - g) > 50) return 'symbol';
+    // Rod sektor
+    if(r === mx && (r - g) > 90 && (r - b) > 90) return 'symbol';
+  }
+
   if(r > 230 && g > 220 && b < 220 && (r - b) > 30) return 'land';
   if(g > 200 && g > r + 20 && g > b + 100) return 'tidal';
   if(b > 230 && g > 230 && r < g - 20 && r > 200) return 'shallow';
@@ -1288,7 +1335,7 @@ async function isLandKartverket(lat, lon, blockShallow){
   if(!data) return null;
 
   const checkOffsets = [[0,0], [-2,0], [2,0], [0,-2], [0,2]];
-  const counts = {land:0, tidal:0, shallow:0, sea_deep:0, medium_sea:0, text:0, unknown:0};
+  const counts = {land:0, tidal:0, shallow:0, sea_deep:0, medium_sea:0, text:0, symbol:0, unknown:0};
 
   for(const off of checkOffsets){
     const px = pixelX + off[0];
@@ -1300,15 +1347,20 @@ async function isLandKartverket(lat, lon, blockShallow){
   }
 
   const avoidCount = counts.land + counts.tidal + (blockShallow ? counts.shallow : 0);
-  // Krever minst 2 av 5 piksler. Den gamle regelen hadde et andre ledd
-  // (avoidCount > safeCount && unknown < 4) som slo til allerede ved EN
-  // enkelt piksel, sa lenge ingen var trygge. Magenta kartsymboler -
-  // dumpefelt, kabelmerking, verneomrader - klassifiseres som "unknown",
-  // og utlоste dermed falske treff midt i apent farvann.
-  return avoidCount >= 2;
+  // Den gamle regelen hadde et andre ledd (avoidCount > safeCount &&
+  // unknown < 4) som slo til allerede ved EN enkelt piksel. Magenta
+  // kartsymboler havnet i "unknown" og utloste falske treff i apent
+  // farvann. Na graderes utslaget i stedet for a vaere ja/nei:
+  //   2 = massivt hinder. 4-5 av 5 piksler. Et brukar, skjaer eller
+  //       holme fyller alle pikslene rundt kontrollpunktet.
+  //   1 = svakt utslag. 2-3 av 5. Krever bekreftelse fra nabopunkt.
+  if(avoidCount >= 4) return 2;
+  if(avoidCount >= 2) return 1;
+  return 0;
 }
 
-async function isLand(lat, lon){
+// Returnerer styrken paa utslaget: 0 = fritt, 1 = svakt, 2 = massivt.
+async function isLandStyrke(lat, lon){
   const blockShallow = draftBlocksShallow();
   // 4 desimaler = ca 11 m. Grovere nokkel ville latt finmasket sampling kollapse til samme oppslag.
   const key = Math.round(lat*10000)/10000 + "," + Math.round(lon*10000)/10000 + "," + (blockShallow ? 'D' : 'S');
@@ -1323,16 +1375,23 @@ async function isLand(lat, lon){
   try {
     const url = 'https://api.open-meteo.com/v1/elevation?latitude='+lat.toFixed(3)+'&longitude='+lon.toFixed(3);
     const r = await fetch(url);
-    if(!r.ok){ landCache.set(key, false); return false; }
+    if(!r.ok){ landCache.set(key, 0); return 0; }
     const j = await r.json();
     const elev = (j.elevation && j.elevation[0]) || 0;
-    const land = elev > 5.0;
-    landCache.set(key, land);
-    return land;
+    // Hoydedata er entydig - regnes som massivt utslag.
+    const styrke = elev > 5.0 ? 2 : 0;
+    landCache.set(key, styrke);
+    return styrke;
   } catch(e){
-    landCache.set(key, false);
-    return false;
+    landCache.set(key, 0);
+    return 0;
   }
+}
+
+// Beholdt som boolean for alle eksisterende kallere (A*-rutenettet,
+// waypoint-sjekk, sik-sak). Bade svakt og massivt utslag sperrer der.
+async function isLand(lat, lon){
+  return (await isLandStyrke(lat, lon)) > 0;
 }
 
 async function countShallowAlong(la1, lo1, la2, lo2){
@@ -1379,8 +1438,8 @@ async function lineCrossesLandStrict(la1, lo1, la2, lo2, marginM){
   const numSamples = sampleCount(distNM, 0.08, 6, 200);
   const courseRad = bearing(la1, lo1, la2, lo2) * Math.PI / 180;
   const perpRad = courseRad + Math.PI/2;
-  // Sidemarginen folger na brukerens klaringsvalg. Den var hardkodet til
-  // 0.3 NM = 556 m, altsa 1,1 km krav til fri bredde per slagben.
+  // Sidemarginen folger na brukerens klaringsvalg. Den var hardkodet
+  // til 0.3 NM = 556 m, altsa 1,1 km krav til fri bredde per slagben.
   const brukM = (marginM === undefined || marginM === null)
     ? Math.max(50, numVal('autoMargin', 100))
     : Math.max(0, marginM);
@@ -1401,12 +1460,11 @@ async function lineCrossesLandStrict(la1, lo1, la2, lo2, marginM){
   return false;
 }
 
-// Antall PAFOLGENDE kontrollpunkter som ma sla ut for at en etappe
-// regnes som sperret. 2 punkter = ca 93 m sammenhengende hinder.
+// Antall PAAFOLGENDE svake utslag som kreves for at en etappe regnes
+// som sperret. Massive utslag (styrke 2) slaar ut med en gang.
 const LAND_MIN_RUN = 2;
 
 // Undersoker en etappe og returnerer detaljer, ikke bare ja/nei.
-// Et enkelt utslag er statistisk stoy - se kommentaren over.
 async function landkrysningDetalj(la1, lo1, la2, lo2, minRun){
   const krav = Math.max(1, minRun || 1);
   const distNM = haversineNM(la1, lo1, la2, lo2);
@@ -1414,32 +1472,48 @@ async function landkrysningDetalj(la1, lo1, la2, lo2, minRun){
   const numSamples = sampleCount(distNM, 0.05, 6, 400);
   const stegM = (distNM / numSamples) * 1852;
 
-  let run = 0, lengsteRun = 0, antallTreff = 0;
+  let run = 0, lengsteRun = 0, antallTreff = 0, antallMassive = 0;
   let runStartLa = null, runStartLo = null;
   let funnetLa = null, funnetLo = null;
+  let massivtFunn = false;
 
   for(let s = 0; s <= numSamples; s++){
     const t = s / numSamples;
     const cLa = la1 + (la2 - la1) * t;
     const cLo = lo1 + (lo2 - lo1) * t;
-    if(await isLand(cLa, cLo)){
+    const styrke = await isLandStyrke(cLa, cLo);
+
+    if(styrke > 0){
       antallTreff++;
       if(run === 0){ runStartLa = cLa; runStartLo = cLo; }
       run++;
       if(run > lengsteRun) lengsteRun = run;
+
+      // Massivt utslag: alle pikslene rundt punktet er hinder. Et
+      // brukar, skjaer eller brotaarn er for smalt til a treffe to
+      // kontrollpunkter (93 m fra hverandre), men gir 5 av 5 piksler.
+      if(styrke >= 2){
+        antallMassive++;
+        if(!massivtFunn){
+          massivtFunn = true;
+          if(funnetLa === null){ funnetLa = cLa; funnetLo = cLo; }
+        }
+      }
       if(run >= krav && funnetLa === null){ funnetLa = runStartLa; funnetLo = runStartLo; }
     } else {
       run = 0;
     }
   }
 
+  const krysser = massivtFunn || lengsteRun >= krav;
+  const breddeM = lengsteRun >= 2 ? lengsteRun * stegM : (massivtFunn ? stegM : 0);
+
   return {
-    krysser: lengsteRun >= krav,
-    antallTreff: antallTreff,
-    lengsteRun: lengsteRun,
-    totaltPunkter: numSamples + 1,
+    krysser: krysser, massivt: massivtFunn,
+    antallTreff: antallTreff, antallMassive: antallMassive,
+    lengsteRun: lengsteRun, totaltPunkter: numSamples + 1,
     lat: funnetLa, lon: funnetLo,
-    breddeM: lengsteRun * stegM
+    breddeM: breddeM, stegM: stegM
   };
 }
 
@@ -1471,55 +1545,193 @@ async function lineClearWithMargin(la1, lo1, la2, lo2, marginM){
 }
 
 // ===== TIDEVANN =====
+// ===== TIDEVANNSDATA =====
+// Kartverket oppgir vannstand i cm over sjokartnull (chart datum).
+// Positiv verdi = mer vann enn kartets dybdetall, og tilsvarende
+// mindre klaring under en bru som er malt fra samme nullnivaa.
+const tidevannCache = new Map();
+
+function tideCacheKey(lat, lon, start){
+  // 0.1 grader ~ 11 km. Tidevann varierer lite over sa korte avstander,
+  // sa naerliggende punkter kan dele datasett.
+  return Math.round(lat*10)/10 + "," + Math.round(lon*10)/10 + "," +
+         start.toISOString().slice(0,10);
+}
+
+// Henter timesverdier for et dogn. Returnerer array med
+// {t: Date, cm: number, flag: string} eller null hvis henting feiler.
+async function hentTidevannsdata(lat, lon, start){
+  const key = tideCacheKey(lat, lon, start);
+  if(tidevannCache.has(key)) return tidevannCache.get(key);
+
+  const end = new Date(start.getTime() + 30*3600*1000);
+  const fmt = function(d){
+    const pad = function(n){ return String(n).padStart(2,'0'); };
+    return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+
+           "T"+pad(d.getHours())+":"+pad(d.getMinutes());
+  };
+  // api.sehavniva.no er avviklet. Gjeldende endepunkt er
+  // vannstand.kartverket.no. Det gamle beholdes til slutt som
+  // reserve i tilfelle noen kjorer en eldre nettverkskonfigurasjon.
+  //
+  // datatype=all gir timesverdier (det vi vil ha for interpolering).
+  // datatype=tab gir BARE hoy- og lavvann - brukbart, men da ma vi
+  // interpolere sinusformet mellom ekstremene.
+  const basis = 'tideapi.php?lat='+lat.toFixed(4)+'&lon='+lon.toFixed(4)+
+                '&fromtime='+fmt(start)+'&totime='+fmt(end)+
+                '&refcode=cd&lang=nb&tide_request=locationdata';
+  const urls = [
+    'https://vannstand.kartverket.no/'+basis+'&datatype=all&interval=60',
+    'https://vannstand.kartverket.no/'+basis+'&datatype=tab',
+    'https://api.sehavniva.no/'+basis+'&datatype=all&interval=60'
+  ];
+
+  let txt = null, feilInfo = "";
+  for(const url of urls){
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(function(){ controller.abort(); }, 30000);
+      const r = await fetch(url, {signal: controller.signal});
+      clearTimeout(timeoutId);
+      if(r.ok){
+        const t = await r.text();
+        if(t && t.indexOf("waterlevel") !== -1){ txt = t; break; }
+        feilInfo = "svar uten vannstandsdata";
+      } else {
+        feilInfo = "HTTP " + r.status;
+      }
+    } catch(e){
+      // CORS-blokkering og nettverksfeil ser like ut fra JavaScript.
+      feilInfo = (e && e.name === 'AbortError') ? "tidsavbrudd" : "nettverk/CORS";
+    }
+  }
+
+  if(!txt){
+    console.warn("Tidevann: alle endepunkt feilet (" + feilInfo + ")");
+    tidevannCache.set(key, null);
+    return null;
+  }
+
+  try {
+    const xml = new DOMParser().parseFromString(txt, "text/xml");
+    const wl = xml.getElementsByTagName("waterlevel");
+    if(!wl.length){ tidevannCache.set(key, null); return null; }
+    const data = [];
+    for(let i=0;i<wl.length;i++){
+      const tStr = wl[i].getAttribute("time");
+      const v = parseFloat(wl[i].getAttribute("value"));
+      if(!tStr || isNaN(v)) continue;
+      data.push({t: new Date(tStr), cm: v, flag: wl[i].getAttribute("flag") || ""});
+    }
+    if(!data.length){ tidevannCache.set(key, null); return null; }
+    data.sort(function(a,b){ return a.t - b.t; });
+
+    // Bare ekstremer? Da er punktene timer fra hverandre og markert
+    // high/low. Interpoleringen ma da folge tidevannskurven, ikke
+    // en rett linje - forskjellen er opptil 20 % av spennet.
+    const antFlagg = data.filter(function(d){
+      return d.flag === 'high' || d.flag === 'low';
+    }).length;
+    data.kunEkstremer = (data.length <= 12 && antFlagg >= data.length - 1);
+
+    tidevannCache.set(key, data);
+    return data;
+  } catch(e){
+    tidevannCache.set(key, null);
+    return null;
+  }
+}
+
+// Slaar opp vannstand for et tidspunkt. Returnerer cm over
+// sjokartnull, eller null hvis tidspunktet ligger utenfor datasettet.
+//
+// Ved timesverdier holder lineaer interpolasjon. Ved bare hoy- og
+// lavvann folger vi tidevannskurven i stedet: vannstanden beveger
+// seg tilnaermet som en cosinus mellom ekstremene, langsomt naer
+// snuing og raskest midtveis. Dette er samme prinsipp som
+// tolvdelsregelen, og lineaer interpolasjon ville bommet med
+// opptil 20 % av spennet - typisk 25-30 cm i Trondheimsfjorden.
+function vannstandVed(data, tidspunkt){
+  if(!data || !data.length) return null;
+  const t = tidspunkt.getTime();
+  if(t < data[0].t.getTime() || t > data[data.length-1].t.getTime()) return null;
+
+  for(let i = 0; i < data.length - 1; i++){
+    const a = data[i], b = data[i+1];
+    const ta = a.t.getTime(), tb = b.t.getTime();
+    if(t >= ta && t <= tb){
+      if(tb === ta) return a.cm;
+      const f = (t - ta) / (tb - ta);
+      if(data.kunEkstremer){
+        // Cosinus-overgang: 0 ved start, 1 ved slutt, med flat
+        // start og slutt slik vannet faktisk oppforer seg.
+        const g = (1 - Math.cos(Math.PI * f)) / 2;
+        return a.cm + (b.cm - a.cm) * g;
+      }
+      return a.cm + (b.cm - a.cm) * f;
+    }
+  }
+  return data[data.length-1].cm;
+}
+
+// Hoyeste og laveste verdi i datasettet. Brukes som praktisk anslag
+// for HAT/LAT nar vi skal regne om mellom referansenivaaer.
+function tidevannsSpenn(data){
+  if(!data || !data.length) return null;
+  let hoy = -Infinity, lav = Infinity;
+  data.forEach(function(d){
+    if(d.cm > hoy) hoy = d.cm;
+    if(d.cm < lav) lav = d.cm;
+  });
+  return {hoy: hoy, lav: lav, middel: (hoy + lav) / 2};
+}
+
+// Hvor mye den oppgitte brohoyden skal korrigeres, i meter.
+// Positiv verdi = mer klaring enn oppgitt, negativ = mindre.
+//
+//   HAT:  hoyden gjelder ved hoyvann. Ligger vannet lavere na,
+//         far vi tilsvarende mer plass. Alltid >= 0.
+//   MSL:  hoyden gjelder ved middelvann. Over middel gir mindre plass.
+//   CD:   hoyden gjelder ved sjokartnull. All vannstand spiser klaring.
+function klaringskorreksjon(refNivaa, vannstandCm, spenn){
+  if(refNivaa === 'off' || vannstandCm === null) return 0;
+  const v = vannstandCm / 100;
+  if(refNivaa === 'cd')  return -v;
+  if(refNivaa === 'msl') return spenn ? -(v - spenn.middel/100) : -v;
+  // HAT er standard
+  return spenn ? (spenn.hoy/100 - v) : 0;
+}
+
 async function fetchTide(lat,lon){
   const box = document.getElementById('tideBox');
   box.innerHTML = "Henter tidevann fra Kartverket...";
   try {
     const depInput = document.getElementById('departureTime').value;
     const start = depInput ? new Date(depInput) : new Date();
-    const end = new Date(start.getTime()+24*3600*1000);
-    const fmt = function(d){
-      const pad = function(n){ return String(n).padStart(2,'0'); };
-      return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+"T"+pad(d.getHours())+":"+pad(d.getMinutes());
-    };
-    const urls = [
-      'https://api.sehavniva.no/tideapi.php?lat='+lat.toFixed(4)+'&lon='+lon.toFixed(4)+'&fromtime='+fmt(start)+'&totime='+fmt(end)+'&datatype=tab&refcode=cd&place=&file=&lang=nb&interval=60&dst=0&tzone=&tide_request=locationdata',
-      'https://api.sehavniva.no/tideapi.php?lat='+lat.toFixed(4)+'&lon='+lon.toFixed(4)+'&fromtime='+fmt(start)+'&totime='+fmt(end)+'&datatype=PRE&refcode=CD&lang=nb&interval=60&tide_request=locationdata'
-    ];
-    let txt = null;
-    for(const url of urls){
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(function(){ controller.abort(); }, 30000);
-        const r = await fetch(url, {signal: controller.signal});
-        clearTimeout(timeoutId);
-        if(r.ok){
-          txt = await r.text();
-          if(txt && txt.indexOf("waterlevel") !== -1) break;
-        }
-      } catch(e){}
-    }
-    if(!txt){
-      box.innerHTML = "<i>Tidevann midlertidig utilgjengelig fra Kartverket. Prov igjen senere.</i>";
+
+    const data = await hentTidevannsdata(lat, lon, start);
+    if(!data){
+      box.innerHTML = "<i>Fikk ikke tidevannsdata fra Kartverket.</i><br>" +
+        "<small style='color:#888'>Sjekk konsollen (F12) for arsak. Vanligste " +
+        "grunner er CORS-blokkering eller at tjenesten er nede. " +
+        "Hoyde- og dybdejustering kjorer uten tidevann sa lenge.</small>";
       return;
     }
-    const xml = new DOMParser().parseFromString(txt, "text/xml");
-    const wl = xml.getElementsByTagName("waterlevel");
-    if(!wl.length){ box.innerHTML = "<i>Ingen tidevannsdata her.</i>"; return; }
-    const data = [];
-    for(let i=0;i<wl.length;i++){
-      data.push({
-        time: wl[i].getAttribute("time"),
-        value: parseFloat(wl[i].getAttribute("value")),
-        flag: wl[i].getAttribute("flag")
-      });
+
+    const spenn = tidevannsSpenn(data);
+    let html = "<b>Vannstand (cm over sjokartnull):</b><br>";
+    if(spenn){
+      html += "<small style='color:#666'>Spenn i perioden: " + spenn.lav.toFixed(0) +
+              " til " + spenn.hoy.toFixed(0) + " cm";
+      html += data.kunEkstremer
+        ? " &middot; kun hoy/lavvann, mellomverdier beregnes</small><br>"
+        : " &middot; timesverdier</small><br>";
     }
-    let html = "<b>Vannstand (cm fra sjokartnull):</b><br>";
     data.slice(0, 24).forEach(function(d){
-      const t = d.time.slice(5,16).replace('T',' ');
+      const t = d.t.toLocaleString('nb-NO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
       const flag = d.flag === "high" ? " <b style='color:#0b3d66'>HW</b>" :
                    d.flag === "low" ? " <b style='color:#c92a2a'>LW</b>" : "";
-      html += t+" -> "+d.value.toFixed(0)+" cm"+flag+"<br>";
+      html += t+" -> "+d.cm.toFixed(0)+" cm"+flag+"<br>";
     });
     box.innerHTML = html;
   } catch(e){ box.innerHTML = "<i>Tidevann feilet: "+e.message+"</i>"; }
@@ -1659,6 +1871,7 @@ async function calculateRoute(){
       routeLine = null;
     }
     vmgLines.forEach(function(l){ map.removeLayer(l); }); vmgLines = [];
+    sisteSegmentTider = [];
     const seg = document.getElementById('segments');
     seg.innerHTML = "";
     if(waypoints.length < 2){ seg.textContent = "Trenger minst 2 waypoints."; return; }
@@ -1699,7 +1912,7 @@ async function calculateRoute(){
     const routeSegments = [];
     const segColors = [];
     for(let r = 0; r < pts.length - 1; r++){
-      const kryssD = segKryss[r] || {krysser: false, breddeM: 0, antallTreff: 0, totaltPunkter: 0};
+      const kryssD = segKryss[r] || {krysser: false, breddeM: 0, antallTreff: 0, totaltPunkter: 0, massivt: false, lengsteRun: 0, stegM: 93};
       const crossesLand = kryssD.krysser;
       const segColor = crossesLand ? '#c92a2a' : '#2b8a3e';
       segColors.push(segColor);
@@ -1719,10 +1932,12 @@ async function calculateRoute(){
 
       const tipBase = crossesLand
         ? 'ADVARSEL: Linja WP'+(r+1)+' til WP'+(r+2)+' krysser land eller grunne!<br>'+
-          'Sammenhengende hinder ca. '+kryssD.breddeM.toFixed(0)+' m'+
+          (kryssD.massivt && kryssD.lengsteRun < 2
+            ? 'Smalt, massivt hinder (skjaer, brukar e.l.) - smalere enn '+kryssD.stegM.toFixed(0)+' m'
+            : 'Sammenhengende hinder ca. '+kryssD.breddeM.toFixed(0)+' m')+
           (kryssD.lat !== null ? ' ved '+kryssD.lat.toFixed(4)+', '+kryssD.lon.toFixed(4) : '')+'<br>'
         : (kryssD.antallTreff > 0
-            ? kryssD.antallTreff+' av '+kryssD.totaltPunkter+' kontrollpunkter slo ut, men ikke sammenhengende - regnes som farbart.<br>'
+            ? kryssD.antallTreff+' av '+kryssD.totaltPunkter+' kontrollpunkter slo svakt ut, men ikke sammenhengende - regnes som farbart.<br>'
             : '');
       segLine.bindTooltip(tipBase + 'Klikk for a sette inn nytt waypoint her', {sticky: true});
       if(crossesLand) console.warn("WP"+(r+1)+"-WP"+(r+2)+" krysser land/grunne!");
@@ -1769,6 +1984,7 @@ async function calculateRoute(){
       let etappeCourseSum = 0, etappeTwaSum = 0;
       let etappeSailSpeedSum = 0, etappeSubCount = 0;
       const segStart = new Date(currentTime.getTime());
+      const segIndeks = i;
 
       for(let j=0;j<subPts.length-1;j++){
         const sLa1 = subPts[j][0], sLo1 = subPts[j][1];
@@ -1823,6 +2039,8 @@ async function calculateRoute(){
         }
         currentTime = new Date(currentTime.getTime()+subHours*3600000);
       }
+
+      sisteSegmentTider[segIndeks] = {start: segStart, slutt: new Date(currentTime.getTime())};
 
       const avgWindSpd = etappeWindCount ? etappeWindSpd/etappeWindCount : 0;
       const avgWindDir = etappeWindCount ? etappeWindDir/etappeWindCount : 0;
@@ -1901,7 +2119,7 @@ async function calculateRoute(){
         } else {
           const sideM = Math.max(50, numVal('autoMargin', 100));
           zigzagNote = '<div style="background:#ffe8cc;padding:4px;border-radius:3px;margin:4px 0;font-size:11px;">' +
-            '\u26A0 <b>' + jibeAdvice.type + " kan ikke tegnes:</b> banen far ikke plass med " +
+            '\u26A0 <b>' + jibeAdvice.type + ' kan ikke tegnes:</b> banen far ikke plass med ' +
             sideM.toFixed(0) + ' m klaring til hver side. Farvannet er for trangt - ' +
             'seil etter eget skjonn, eller senk Klaring i ruteplanleggeren.</div>';
           const warnMarker = L.marker([startLa, startLo], {
@@ -1963,9 +2181,25 @@ async function calculateRoute(){
       if(draftVal > 0){
         const nShallow = await countShallowAlong(la1, lo1, la2, lo2);
         if(nShallow > 0){
+          // Sjokartets dybdetall gjelder ved sjokartnull. Positiv
+          // vannstand gir tilsvarende mer vann under kjolen.
+          let dybdeTillegg = '';
+          const refN = (document.getElementById('tideRef') || {}).value || 'hat';
+          if(refN !== 'off'){
+            const midtT = new Date((segStart.getTime() + currentTime.getTime())/2);
+            const td = await hentTidevannsdata((la1+la2)/2, (lo1+lo2)/2, departure);
+            const vs = vannstandVed(td, midtT);
+            if(vs !== null){
+              const effDyp = draftVal - vs/100;
+              dybdeTillegg = '<br>Vannstand ved passering: ' + (vs >= 0 ? '+' : '') + vs.toFixed(0) +
+                ' cm \u2192 trenger <b>' + Math.max(0, effDyp).toFixed(1) +
+                ' m</b> pa sjokartet (mot ' + draftVal.toFixed(1) + ' m ved sjokartnull).';
+            }
+          }
           shallowNote = '<div style="background:#fff3cd;padding:4px;border-radius:3px;margin:4px 0;font-size:11px;">' +
             '\u26A0 <b>Grunt farvann:</b> ' + nShallow + ' punkt' + (nShallow>1?'er':'') +
-            ' langs etappen er merket grunt/tidevann pa sjokartet. Dypgang ' + draftVal.toFixed(1) + ' m - kontroller dybder.</div>';
+            ' langs etappen er merket grunt/tidevann pa sjokartet. Dypgang ' + draftVal.toFixed(1) + ' m.' +
+            dybdeTillegg + '</div>';
         }
       }
 
@@ -2944,37 +3178,96 @@ async function kjorKlaringssjekk(rutePunkter, stille){
     if(!treff.length){
       setEl('minClearance', "Ingen");
       setEl('clearanceStatus', "Ingen registrerte broer eller luftspenn krysser ruta. NB: OpenStreetMap kan mangle data - kontroller mot sjokart.");
-      return {antall: 0, antBad: 0, antWarn: 0, antUkjent: 0, minKlaring: null,
-              kravHoyde: mast + margin, treff: []};
+      return {antall: 0, antBad: 0, antWarn: 0, antUkjent: 0, antBroer: 0,
+              minKlaring: null, kravHoyde: mast + margin, treff: []};
     }
 
     treff.sort(function(a,b){ return a.segment - b.segment; });
     hazardList = treff;
 
+    const antBroer = treff.filter(function(t){ return t.type === 'bro'; }).length;
     const kravHoyde = mast + margin;
     let minKlaring = Infinity;
     let antBad = 0, antWarn = 0, antUkjent = 0;
     let html = '';
 
+    // ===== TIDEVANNSJUSTERING =====
+    // Hentes for midtpunktet av ruta og gjenbrukes for alle hindre.
+    // Tidevannet varierer lite over de avstandene en dagsetappe dekker.
+    const refNivaa = (document.getElementById('tideRef') || {}).value || 'hat';
+    let tideData = null, tideSpenn = null;
+    if(refNivaa !== 'off'){
+      const midt = pts[Math.floor(pts.length/2)];
+      const depInput = document.getElementById('departureTime').value;
+      const avgang = depInput ? new Date(depInput) : new Date();
+      if(!stille) setEl('clearanceStatus', "Henter tidevann for klaringsberegning...");
+      tideData = await hentTidevannsdata(midt[0], midt[1], avgang);
+      tideSpenn = tidevannsSpenn(tideData);
+    }
+
+    // Finner passeringstidspunkt for et hinder ut fra segmenttidene
+    // som ble lagret under siste ruteberegning.
+    const passeringstid = function(segNr){
+      const st = sisteSegmentTider[segNr - 1];
+      if(!st) return null;
+      // Midt i etappen er et rimelig anslag naar vi ikke vet hvor
+      // langs etappen hinderet ligger.
+      return new Date((st.start.getTime() + st.slutt.getTime()) / 2);
+    };
+
+    let tideNote = "";
+    if(refNivaa === 'off'){
+      tideNote = "Tidevann er ikke tatt med.";
+    } else if(!tideData){
+      tideNote = "\u26A0 Fikk ikke tidevannsdata - hoydene er IKKE justert.";
+    }
+
     treff.forEach(function(t, i){
+      // Beregn tidevannskorreksjon for dette hinderet
+      let vannstand = null, korr = 0, tidTekst = "";
+      if(tideData){
+        const nar = passeringstid(t.segment);
+        if(nar){
+          vannstand = vannstandVed(tideData, nar);
+          korr = klaringskorreksjon(refNivaa, vannstand, tideSpenn);
+          if(vannstand !== null){
+            tidTekst = nar.toLocaleString('nb-NO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) +
+                       ', vannstand ' + (vannstand >= 0 ? '+' : '') + vannstand.toFixed(0) + ' cm';
+          }
+        }
+      }
+      t.vannstandCm = vannstand;
+      t.korreksjonM = korr;
+
+      // Effektiv klaring = oppgitt hoyde + tidevannskorreksjon
+      const effektiv = (t.clearance !== null) ? t.clearance + korr : null;
+      t.effektivKlaring = effektiv;
+
       let cls, ikon, tekst;
       if(t.clearance === null){
         cls = 'hz-unknown'; ikon = '?'; antUkjent++;
         tekst = '<b style="color:#6c757d">Hoyde ikke registrert</b>';
       } else {
-        if(t.clearance < minKlaring) minKlaring = t.clearance;
+        if(effektiv < minKlaring) minKlaring = effektiv;
         if(mast <= 0){
           cls = 'hz-ok'; ikon = t.type === 'luftspenn' ? '\u26A1' : '\uD83C\uDF09';
-          tekst = '<b>' + t.clearance.toFixed(1) + ' m</b> seilbar hoyde';
-        } else if(t.clearance < kravHoyde){
+          tekst = '<b>' + effektiv.toFixed(1) + ' m</b> seilbar hoyde';
+        } else if(effektiv < kravHoyde){
           cls = 'hz-bad'; ikon = '\u26D4'; antBad++;
-          tekst = '<b style="color:#c92a2a">' + t.clearance.toFixed(1) + ' m - FOR LAVT</b> (trenger ' + kravHoyde.toFixed(1) + ' m)';
-        } else if(t.clearance < kravHoyde + 2){
+          tekst = '<b style="color:#c92a2a">' + effektiv.toFixed(1) + ' m - FOR LAVT</b> (trenger ' + kravHoyde.toFixed(1) + ' m)';
+        } else if(effektiv < kravHoyde + 2){
           cls = 'hz-warn'; ikon = '\u26A0'; antWarn++;
-          tekst = '<b style="color:#fd7e14">' + t.clearance.toFixed(1) + ' m - knapt</b> (' + (t.clearance - kravHoyde).toFixed(1) + ' m til overs)';
+          tekst = '<b style="color:#fd7e14">' + effektiv.toFixed(1) + ' m - knapt</b> (' + (effektiv - kravHoyde).toFixed(1) + ' m til overs)';
         } else {
           cls = 'hz-ok'; ikon = '\u2713';
-          tekst = '<b style="color:#2b8a3e">' + t.clearance.toFixed(1) + ' m</b> (' + (t.clearance - kravHoyde).toFixed(1) + ' m klaring)';
+          tekst = '<b style="color:#2b8a3e">' + effektiv.toFixed(1) + ' m</b> (' + (effektiv - kravHoyde).toFixed(1) + ' m klaring)';
+        }
+        // Vis regnestykket naar tidevannet faktisk endrer noe
+        if(Math.abs(korr) >= 0.05){
+          tekst += '<br><small style="color:#666">Oppgitt ' + t.clearance.toFixed(1) + ' m ' +
+                   (korr >= 0 ? '+' : '') + korr.toFixed(1) + ' m tidevann';
+          if(tidTekst) tekst += ' (' + tidTekst + ')';
+          tekst += '</small>';
         }
       }
 
@@ -2982,14 +3275,32 @@ async function kjorKlaringssjekk(rutePunkter, stille){
         icon: makeHazardIcon(ikon, cls),
         zIndexOffset: 900
       }).addTo(map);
+      // Horisontal klaring mellom brukar finnes ikke i OSM. Hoydesjekken
+      // ser brua som en strek, sa en godkjent hoyde sier ingenting om at
+      // ruta faktisk treffer seilopet mellom karene.
+      const karAdvarsel = (t.type === 'bro')
+        ? '<br><b style="color:#fd7e14">\u2693 Avstand mellom brukar er IKKE sjekket</b> - ' +
+          'finn seilopet pa sjokartet.'
+        : '';
+
+      const tideTip = (t.clearance !== null && Math.abs(korr) >= 0.05)
+        ? '<br>Oppgitt ' + t.clearance.toFixed(1) + ' m, effektiv <b>' + effektiv.toFixed(1) + ' m</b>' +
+          (tidTekst ? '<br>' + tidTekst : '')
+        : '';
+
       m.bindTooltip('<b>' + t.navn + '</b> (' + t.type + ')<br>' +
         (t.clearance !== null ? 'Seilbar hoyde: ' + t.clearance.toFixed(1) + ' m' : 'Hoyde ikke registrert i OSM') +
-        '<br>Etappe WP' + t.segment + ' til WP' + (t.segment+1), {sticky: true});
+        tideTip +
+        '<br>Etappe WP' + t.segment + ' til WP' + (t.segment+1) + karAdvarsel, {sticky: true});
       hazardMarkers.push(m);
 
       html += '<div class="hz-row" onclick="zoomToHazard(' + i + ')">' +
         '<b>' + t.navn + '</b> <small style="color:#888">(' + t.type + ', etappe ' + t.segment + ')</small><br>' +
-        tekst + '</div>';
+        tekst +
+        (t.type === 'bro'
+          ? '<br><small style="color:#fd7e14">\u2693 Kontroller seilopet mellom brukarene manuelt</small>'
+          : '') +
+        '</div>';
     });
 
     setHtml('clearanceBox', html);
@@ -3011,11 +3322,20 @@ async function kjorKlaringssjekk(rutePunkter, stille){
     if(antBad > 0) status += "\u26D4 " + antBad + " for lavt for masta! ";
     if(antWarn > 0) status += "\u26A0 " + antWarn + " knapt. ";
     if(antUkjent > 0) status += "\u26AA " + antUkjent + " uten hoydedata. ";
+    if(antBroer > 0){
+      status += "\u2693 " + antBroer + " brokryssing" + (antBroer > 1 ? "er" : "") +
+        " - avstand mellom brukar er ikke sjekket, finn seilopet pa sjokartet. ";
+    }
+    if(tideNote) status += tideNote + " ";
+    else if(tideData){
+      const refNavn = {hat:'HAT (hoyvann)', msl:'middelvann', cd:'sjokartnull'}[refNivaa] || refNivaa;
+      status += "\uD83C\uDF0A Hoyder justert for tidevann, malt fra " + refNavn + ". ";
+    }
     status += "Kontroller mot sjokart.";
     setEl('clearanceStatus', status);
 
     return {antall: treff.length, antBad: antBad, antWarn: antWarn,
-            antUkjent: antUkjent,
+            antUkjent: antUkjent, antBroer: antBroer,
             minKlaring: (minKlaring === Infinity ? null : minKlaring),
             kravHoyde: mast + margin, treff: treff};
 
@@ -3046,6 +3366,10 @@ function klaringSammendrag(res, mast){
   }
   if(res.antUkjent > 0){
     t += " \u26AA " + res.antUkjent + " uten registrert hoyde - kontroller mot sjokart.";
+  }
+  if(res.antBroer > 0){
+    t += " \u2693 " + res.antBroer + " brokryssing" + (res.antBroer > 1 ? "er" : "") +
+         ": avstanden mellom brukarene er IKKE vurdert - finn seilopet pa sjokartet.";
   }
   return t;
 }
@@ -3608,8 +3932,7 @@ async function autoPlanRoute(){
     } while(fjernetIRunde > 0 && endelig.length > 2);
 
     // Er det fortsatt for mange punkter, fjernes de som koster minst i
-    // ekstra distanse - aldri mekanisk hvert n-te punkt. Alt som er
-    // igjen etter oppryddingen trengs, sa dette telles og rapporteres.
+    // ekstra distanse - aldri mekanisk hvert n-te punkt.
     let tvangsfjernet = 0;
     while(endelig.length > 30){
       let bestI = -1, bestKost = Infinity;
