@@ -1267,7 +1267,6 @@ function classifyKartverketPixel(r, g, b){
   // ble da lest som symbol - altsaa usynlig for landdeteksjonen.
   //   Gul sektor (255,222,23)->laveste 23, Gronn (0,166,81)->0,
   //   Magenta (232,0,140)->0, men Landfyll (255,247,214)->214.
-  // Symbolfarger har alltid minst en kanal presset i bunn.
   const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
   const kroma = mx - mn;
   if(mn < 130 && kroma > 100 && !(r < 100 && g < 100 && b < 100)){
@@ -1570,6 +1569,9 @@ async function hentTidevannsdata(lat, lon, start){
   const key = tideCacheKey(lat, lon, start);
   if(tidevannCache.has(key)) return tidevannCache.get(key);
 
+  // Start 6 timer FOR avgang, slik at enhver passeringstid (avgang + minutter)
+  // alltid har et datapunkt foran seg aa interpolere fra.
+  const vinduStart = new Date(start.getTime() - 6*3600*1000);
   const end = new Date(start.getTime() + 30*3600*1000);
   const fmt = function(d){
     const pad = function(n){ return String(n).padStart(2,'0'); };
@@ -1584,7 +1586,7 @@ async function hentTidevannsdata(lat, lon, start){
   // datatype=tab gir BARE hoy- og lavvann - brukbart, men da ma vi
   // interpolere sinusformet mellom ekstremene.
   const basis = 'tideapi.php?lat='+lat.toFixed(4)+'&lon='+lon.toFixed(4)+
-                '&fromtime='+fmt(start)+'&totime='+fmt(end)+
+                '&fromtime='+fmt(vinduStart)+'&totime='+fmt(end)+
                 '&refcode=cd&lang=nb&tide_request=locationdata';
   const urls = [
     'https://vannstand.kartverket.no/'+basis+'&datatype=all&interval=60',
@@ -1660,7 +1662,12 @@ async function hentTidevannsdata(lat, lon, start){
 function vannstandVed(data, tidspunkt){
   if(!data || !data.length) return null;
   const t = tidspunkt.getTime();
-  if(t < data[0].t.getTime() || t > data[data.length-1].t.getTime()) return null;
+  const t0 = data[0].t.getTime(), tN = data[data.length-1].t.getTime();
+  // Klem innenfor 2 timer utenfor serien i stedet for aa gi null. Da
+  // faar vi likevel en fornuftig vannstand ved sma rundingsavvik.
+  const TOL = 2*3600*1000;
+  if(t < t0){ return (t0 - t <= TOL) ? data[0].cm : null; }
+  if(t > tN){ return (t - tN <= TOL) ? data[data.length-1].cm : null; }
 
   for(let i = 0; i < data.length - 1; i++){
     const a = data[i], b = data[i+1];
@@ -3211,11 +3218,9 @@ async function kjorKlaringssjekk(rutePunkter, stille){
       tideSpenn = tidevannsSpenn(tideData);
     }
 
-    // BUGFIKS: sisteSegmentTider fylles forst av calculateRoute(), men
-    // ruteplanleggeren kaller denne sjekken FOR den kjorer. Da var lista
-    // tom eller fra en annen rute, passeringstid ga null, og
-    // tidevannskorreksjonen ble alltid 0. Vi bygger derfor et eget
-    // tidsestimat naar de lagrede tidene ikke passer til ruta.
+    // BUGFIKS: sisteSegmentTider fylles forst av calculateRoute(). Naar
+    // ruteplanleggeren kaller sjekken FOR den kjorer, er lista tom eller
+    // fra en annen rute. Da bygger vi et eget tidsestimat.
     const brukLagredeTider = sisteSegmentTider.length === pts.length - 1;
     let estimerteTider = null;
     if(!brukLagredeTider){
@@ -4048,9 +4053,7 @@ async function autoPlanRoute(){
         }
 
         // Er hoyden eneste hinder, skal ruta LIKEVEL tegnes opp. Da ser
-        // brukeren hvor den lave kryssingen ligger og kan selv vurdere om
-        // masta kan legges ned, om det finnes seilop, eller sette inn egne
-        // waypoints. Ruta merkes som sperret.
+        // brukeren hvor den lave kryssingen ligger.
         if(sperrerVarArsaken && kontrollRute){
           endelig = kontrollRute.endelig;
           sisteTvangsfjernet = kontrollRute.tvangsfjernet || 0;
@@ -4140,11 +4143,11 @@ async function autoPlanRoute(){
     // denne ruta, sa vi gjenbruker resultatet i stedet for a sporre Overpass
     // en gang til. Markorene i kartet er da ogsa allerede satt.
     // RIKTIG REKKEFOLGE:
-    //  1) Tegn ruta (calculateRoute tegner linjer og fyller sisteSegmentTider)
-    //  2) Kjor klaringssjekken PA den ferdige ruta - dette plasserer
-    //     hindermarkorene OG gir noyaktig klaring med riktige passeringstider.
-    //     clearRoute() (da ruta ble tegnet) hadde wipet markorene, derfor ma
-    //     dette skje HER, helt til slutt.
+    //  1) Tegn ruta (calculateRoute fyller ogsa sisteSegmentTider)
+    //  2) Kjor klaringssjekken PA den ferdige ruta. Den plasserer
+    //     hindermarkorene OG bruker na noyaktige passeringstider til
+    //     tidevann. clearRoute() (da ruta ble tegnet) wipet markorene,
+    //     derfor MA dette skje her, helt til slutt.
     //  3) Bygg statustekst fra det ferske resultatet.
     await calculateRoute();
 
@@ -4157,7 +4160,6 @@ async function autoPlanRoute(){
       ? klaringSammendrag(klaring, mastHoyde)
       : klaringSammendrag(null, 0);
 
-    // Fortell brukeren at ruta faktisk ble lagt om, og hvorfor.
     let omrutingTekst = "";
     if(mastHoyde > 0 && omrutinger > 0){
       omrutingTekst = " \uD83D\uDD01 Ruta ble lagt om " + omrutinger + " gang" +
@@ -4451,14 +4453,13 @@ function oppdaterAutoAnslag(){
   if(el) el.addEventListener('change', oppdaterAutoAnslag);
 });
 
-// Diagnoseverktoy for pikselklassifisering. Kall fra konsollen (F12):
-//   sjekkFarge(63.29, 8.20)
+// Diagnoseverktoy. Kall fra konsollen (F12): sjekkFarge(63.29, 8.20)
 window.sjekkFarge = async function(lat, lon){
   const z = 14, n = Math.pow(2, z);
   const xf = (lon + 180) / 360 * n;
   const yf = (1 - Math.log(Math.tan(lat*Math.PI/180) + 1/Math.cos(lat*Math.PI/180))/Math.PI) / 2 * n;
   const d = await getTilePixels(z, Math.floor(xf), Math.floor(yf));
-  if(!d){ console.log("Fikk ikke flis fra Kartverket"); return; }
+  if(!d){ console.log("Fikk ikke flis"); return; }
   const px = Math.floor((xf - Math.floor(xf)) * 256);
   const py = Math.floor((yf - Math.floor(yf)) * 256);
   const rad = [];
@@ -4466,15 +4467,31 @@ window.sjekkFarge = async function(lat, lon){
     const x = px + off[0], y = py + off[1];
     if(x < 0 || x >= 256 || y < 0 || y >= 256) return;
     const i = (y*256 + x) * 4;
-    const r = d[i], g = d[i+1], b = d[i+2];
-    rad.push({ piksel: off[0]+","+off[1], rgb: "("+r+","+g+","+b+")",
-      laveste: Math.min(r,g,b), kroma: Math.max(r,g,b)-Math.min(r,g,b),
-      klasse: classifyKartverketPixel(r, g, b) });
+    rad.push({ rgb: "("+d[i]+","+d[i+1]+","+d[i+2]+")",
+      laveste: Math.min(d[i],d[i+1],d[i+2]),
+      klasse: classifyKartverketPixel(d[i], d[i+1], d[i+2]) });
   });
   console.table(rad);
-  const styrke = await isLandStyrke(lat, lon);
-  console.log("Samlet styrke: " + styrke +
-    (styrke === 2 ? " (massivt hinder)" : styrke === 1 ? " (svakt utslag)" : " (fritt farvann)"));
+};
+
+// Diagnose for tidevann. Kall: sjekkTidevann() - viser om korreksjonen kjorer.
+window.sjekkTidevann = async function(){
+  if(!waypoints.length){ console.log("Sett minst ett waypoint forst."); return; }
+  const ll = waypoints[Math.floor(waypoints.length/2)].marker.getLatLng();
+  const dep = document.getElementById('departureTime').value;
+  const avgang = dep ? new Date(dep) : new Date();
+  const data = await hentTidevannsdata(ll.lat, ll.lng, avgang);
+  if(!data){ console.log("Fikk ikke tidevannsdata"); return; }
+  console.log("Datapunkter:", data.length, "| kunEkstremer:", !!data.kunEkstremer);
+  console.log("Forste:", data[0].t.toLocaleString('nb-NO'), data[0].cm, "cm");
+  console.log("Siste: ", data[data.length-1].t.toLocaleString('nb-NO'), data[data.length-1].cm, "cm");
+  const nar = new Date(avgang.getTime() + 10*60000);
+  const vs = vannstandVed(data, nar);
+  console.log("Vannstand ved avgang+10min ("+nar.toLocaleString('nb-NO')+"):", vs, "cm");
+  const spenn = tidevannsSpenn(data);
+  const ref = (document.getElementById('tideRef')||{}).value || 'hat';
+  console.log("Referanse:", ref, "| Spenn:", spenn.lav.toFixed(0), "-", spenn.hoy.toFixed(0), "cm");
+  console.log("Korreksjon:", klaringskorreksjon(ref, vs, spenn).toFixed(2), "m");
 };
 
 drawPolar();
