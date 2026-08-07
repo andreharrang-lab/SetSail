@@ -3354,11 +3354,11 @@ async function kjorKlaringssjekk(rutePunkter, stille){
 
       html += '<div class="hz-row" onclick="zoomToHazard(' + i + ')">' +
         '<b>' + t.navn + '</b> <small style="color:#888">(' + t.type + ', etappe ' + t.segment + ')</small><br>' +
-        tekst +
+        tekst/* +
         (t.type === 'bro'
           ? '<br><small style="color:#fd7e14">\u2693 Kontroller seilopet mellom brukarene manuelt</small>'
           : '') +
-        '</div>';
+        '</div>'*/;
     });
 
     setHtml('clearanceBox', html);
