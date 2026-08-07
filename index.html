@@ -3315,11 +3315,11 @@ async function kjorKlaringssjekk(rutePunkter, stille){
       // Horisontal klaring mellom brukar finnes ikke i OSM. Hoydesjekken
       // ser brua som en strek, sa en godkjent hoyde sier ingenting om at
       // ruta faktisk treffer seilopet mellom karene.
-      const karAdvarsel = (t.type === 'bro')
+      /*const karAdvarsel = (t.type === 'bro')
         ? '<br><b style="color:#fd7e14">\u2693 Avstand mellom brukar er IKKE sjekket</b> - ' +
           'finn seilopet pa sjokartet.'
         : '';
-
+*/
       const tideTip = (t.clearance !== null && refNivaa !== 'off' && vannstand !== null)
         ? '<br>Oppgitt ' + t.clearance.toFixed(1) + ' m, effektiv <b>' + effektiv.toFixed(1) + ' m</b>' +
           (tidTekst ? '<br>' + tidTekst : '')
@@ -3360,8 +3360,8 @@ async function kjorKlaringssjekk(rutePunkter, stille){
     if(antWarn > 0) status += "\u26A0 " + antWarn + " knapt. ";
     if(antUkjent > 0) status += "\u26AA " + antUkjent + " uten hoydedata. ";
     if(antBroer > 0){
-      status += "\u2693 " + antBroer + " brokryssing" + (antBroer > 1 ? "er" : "") +
-        " - avstand mellom brukar er ikke sjekket, finn seilopet pa sjokartet. ";
+      status += "\u2693 " + antBroer + " brokryssing" + (antBroer > 1 ? "er" : "")/* +
+        " - avstand mellom brukar er ikke sjekket, finn seilopet pa sjokartet. "*/;
     }
     if(tideNote) status += tideNote + " ";
     else if(tideData){
