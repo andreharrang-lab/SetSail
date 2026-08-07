@@ -721,39 +721,7 @@ rebuildBoatSelect();
 
 function onBoatChange(){
   currentPolar = polars[boatSelect.value];
-  // Diagnoseverktoy for pikselklassifisering. Kall fra konsollen (F12):
-//   sjekkFarge(63.29, 8.20)
-// Skriver ut faktisk RGB fra sjokartet og hvordan fargen tolkes, slik at
-// terskelen kan verifiseres mot ekte fliser i stedet for anslag.
-window.sjekkFarge = async function(lat, lon){
-  const z = 14, n = Math.pow(2, z);
-  const xf = (lon + 180) / 360 * n;
-  const yf = (1 - Math.log(Math.tan(lat*Math.PI/180) + 1/Math.cos(lat*Math.PI/180))/Math.PI) / 2 * n;
-  const d = await getTilePixels(z, Math.floor(xf), Math.floor(yf));
-  if(!d){ console.log("Fikk ikke flis fra Kartverket"); return; }
-  const px = Math.floor((xf - Math.floor(xf)) * 256);
-  const py = Math.floor((yf - Math.floor(yf)) * 256);
-  const rad = [];
-  [[0,0],[-2,0],[2,0],[0,-2],[0,2]].forEach(function(off){
-    const x = px + off[0], y = py + off[1];
-    if(x < 0 || x >= 256 || y < 0 || y >= 256) return;
-    const i = (y*256 + x) * 4;
-    const r = d[i], g = d[i+1], b = d[i+2];
-    rad.push({
-      piksel: off[0] + "," + off[1],
-      rgb: "(" + r + "," + g + "," + b + ")",
-      laveste: Math.min(r,g,b),
-      kroma: Math.max(r,g,b) - Math.min(r,g,b),
-      klasse: classifyKartverketPixel(r, g, b)
-    });
-  });
-  console.table(rad);
-  const styrke = await isLandStyrke(lat, lon);
-  console.log("Samlet styrke: " + styrke +
-    (styrke === 2 ? " (massivt hinder)" : styrke === 1 ? " (svakt utslag)" : " (fritt farvann)"));
-};
-
-drawPolar();
+  drawPolar();
   if (waypoints.length >= 2) calculateRoute();
 }
 
@@ -1294,14 +1262,13 @@ function classifyKartverketPixel(r, g, b){
   // Fyrlyktsektorer (gul, gronn, rod), magenta markeringer og
   // kabel-/dumpefeltgrenser er tegnet i mettede farger. Terrengfyll
   // (land, tidevann, grunt, dypt) er alltid bleke.
-  // Skillet gar pa hvor lav den morkeste kanalen er, ikke pa kroma alene.
-  // Landfyll kan vaere mettet nok til aa passere en ren kroma-terskel, og
+  // Skillet gaar paa hvor lav den morkeste kanalen er, ikke kroma alene.
+  // Landfyll kan vaere mettet nok til aa passere en ren kroma-terskel og
   // ble da lest som symbol - altsaa usynlig for landdeteksjonen.
   //   Gul sektor   (255,222, 23) -> laveste  23
   //   Gronn sektor (  0,166, 81) -> laveste   0
   //   Magenta      (232,  0,140) -> laveste   0
   //   Landfyll     (255,247,214) -> laveste 214
-  //   Grunt vann   (205,240,250) -> laveste 205
   // Symbolfarger har alltid minst en kanal presset i bunn.
   const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
   const kroma = mx - mn;
@@ -3248,38 +3215,31 @@ async function kjorKlaringssjekk(rutePunkter, stille){
 
     // BUGFIKS: sisteSegmentTider fylles forst av calculateRoute(), men
     // ruteplanleggeren kaller denne sjekken FOR den kjorer. Da var lista
-    // enten tom eller fra en helt annen rute, passeringstid ga null, og
+    // tom eller fra en annen rute, passeringstid ga null, og
     // tidevannskorreksjonen ble alltid 0 - koden kjorte aldri i praksis.
-    //
-    // Vi bygger derfor et eget tidsestimat for akkurat de punktene vi har
-    // faatt inn, og bruker de lagrede tidene bare naar de passer til ruta.
+    // Vi bygger derfor et eget tidsestimat naar de lagrede tidene ikke
+    // passer til ruta vi faktisk sjekker.
     const brukLagredeTider = sisteSegmentTider.length === pts.length - 1;
     let estimerteTider = null;
-
     if(!brukLagredeTider){
       const depInput2 = document.getElementById('departureTime').value;
       const start0 = depInput2 ? new Date(depInput2) : new Date();
-      // Grovt fartsanslag: motorfart hvis satt, ellers en typisk marsjfart
-      // for seil. Vi trenger bare a treffe riktig time, ikke riktig minutt.
       const motorRaw2 = (document.getElementById('motorSpeed') || {}).value || "";
       const fart = Math.max(2, parseFloat(motorRaw2) || 5);
       estimerteTider = [];
       let loptTid = 0;
-      for(let s = 0; s < pts.length - 1; s++){
-        const nm = haversineNM(pts[s][0], pts[s][1], pts[s+1][0], pts[s+1][1]);
+      for(let s2 = 0; s2 < pts.length - 1; s2++){
+        const nm = haversineNM(pts[s2][0], pts[s2][1], pts[s2+1][0], pts[s2+1][1]);
         const t0e = new Date(start0.getTime() + loptTid * 3600000);
         loptTid += nm / fart;
         estimerteTider.push({start: t0e, slutt: new Date(start0.getTime() + loptTid * 3600000)});
       }
     }
-
     const passeringstid = function(segNr){
       const st = brukLagredeTider
         ? sisteSegmentTider[segNr - 1]
         : (estimerteTider ? estimerteTider[segNr - 1] : null);
       if(!st) return null;
-      // Midt i etappen er et rimelig anslag naar vi ikke vet hvor
-      // langs etappen hinderet ligger.
       return new Date((st.start.getTime() + st.slutt.getTime()) / 2);
     };
 
@@ -4063,8 +4023,8 @@ async function autoPlanRoute(){
     let omrutinger = 0;
     let sisteHindring = "";
     let sisteTvangsfjernet = 0;
-    // Settes hvis eneste farbare rute gar under en bru/spenn som er for lav
-    // for masta. Ruta tegnes likevel opp, men merkes tydelig som sperret.
+    // Settes hvis eneste farbare rute gaar under en bru/spenn som er for
+    // lav for masta. Ruta tegnes likevel opp, men merkes tydelig sperret.
     let hoydeSperret = false;
 
     while(forsok < MAKS_FORSOK){
@@ -4091,15 +4051,15 @@ async function autoPlanRoute(){
           if(kontroll.ok) kontrollRute = kontroll;
         }
 
-        // Er hoyden eneste hinder, skal ruta likevel tegnes opp. Da ser
+        // Er hoyden eneste hinder, skal ruta LIKEVEL tegnes opp. Da ser
         // brukeren hvor den lave kryssingen ligger og kan selv vurdere om
         // masta kan legges ned, om det finnes seilop, eller sette inn egne
-        // waypoints. Ruta merkes som sperret i statusteksten.
+        // waypoints. Ruta merkes som sperret.
         if(sperrerVarArsaken && kontrollRute){
           endelig = kontrollRute.endelig;
           sisteTvangsfjernet = kontrollRute.tvangsfjernet || 0;
           hoydeSperret = true;
-          autoStatus("Tegner opp ruta som gar under for lav bru/spenn...");
+          autoStatus("Tegner opp ruta som gaar under for lav bru/spenn...");
           klaring = await kjorKlaringssjekk(endelig, true);
           break;
         }
@@ -4218,10 +4178,10 @@ async function autoPlanRoute(){
     autoProgress(100);
     if(hoydeSperret){
       autoStatus("\u26D4 Ruta er tegnet opp (" + endelig.length + " waypoints, " + ruteNM.toFixed(2) +
-        " NM), men den gar under bru/spenn som er for lave for masta (krever " +
-        kravHoyde.toFixed(1) + " m inkl. margin). Det finnes ingen alternativ vei utenom innenfor " +
-        "sokeomradet. Kontroller de rode kryssingene i kartet - vurder a legge ned masta, finne " +
-        "seilopet, senke margin, eller sette inn egne waypoints." +
+        " NM), men den gaar under bru/spenn som er for lave for masta (krever " +
+        kravHoyde.toFixed(1) + " m inkl. margin). Ingen alternativ vei utenom innenfor sokeomradet. " +
+        "Kontroller de rode kryssingene i kartet - vurder aa legge ned masta, finne seilopet, " +
+        "senke margin, eller sette inn egne waypoints." +
         (ufarbare > 0 ? " \u26A0 " + ufarbare + " etappe" + (ufarbare>1?"r":"") +
           " krysser i tillegg land eller grunne." : "") +
         snapNote + klaringTekst + omrutingTekst);
@@ -4497,6 +4457,32 @@ function oppdaterAutoAnslag(){
   const el = document.getElementById(id);
   if(el) el.addEventListener('change', oppdaterAutoAnslag);
 });
+
+// Diagnoseverktoy for pikselklassifisering. Kall fra konsollen (F12):
+//   sjekkFarge(63.29, 8.20)
+window.sjekkFarge = async function(lat, lon){
+  const z = 14, n = Math.pow(2, z);
+  const xf = (lon + 180) / 360 * n;
+  const yf = (1 - Math.log(Math.tan(lat*Math.PI/180) + 1/Math.cos(lat*Math.PI/180))/Math.PI) / 2 * n;
+  const d = await getTilePixels(z, Math.floor(xf), Math.floor(yf));
+  if(!d){ console.log("Fikk ikke flis fra Kartverket"); return; }
+  const px = Math.floor((xf - Math.floor(xf)) * 256);
+  const py = Math.floor((yf - Math.floor(yf)) * 256);
+  const rad = [];
+  [[0,0],[-2,0],[2,0],[0,-2],[0,2]].forEach(function(off){
+    const x = px + off[0], y = py + off[1];
+    if(x < 0 || x >= 256 || y < 0 || y >= 256) return;
+    const i = (y*256 + x) * 4;
+    const r = d[i], g = d[i+1], b = d[i+2];
+    rad.push({ piksel: off[0]+","+off[1], rgb: "("+r+","+g+","+b+")",
+      laveste: Math.min(r,g,b), kroma: Math.max(r,g,b)-Math.min(r,g,b),
+      klasse: classifyKartverketPixel(r, g, b) });
+  });
+  console.table(rad);
+  const styrke = await isLandStyrke(lat, lon);
+  console.log("Samlet styrke: " + styrke +
+    (styrke === 2 ? " (massivt hinder)" : styrke === 1 ? " (svakt utslag)" : " (fritt farvann)"));
+};
 
 drawPolar();
 renderRouteList();
