@@ -1265,10 +1265,8 @@ function classifyKartverketPixel(r, g, b){
   // Skillet gaar paa hvor lav den morkeste kanalen er, ikke kroma alene.
   // Landfyll kan vaere mettet nok til aa passere en ren kroma-terskel og
   // ble da lest som symbol - altsaa usynlig for landdeteksjonen.
-  //   Gul sektor   (255,222, 23) -> laveste  23
-  //   Gronn sektor (  0,166, 81) -> laveste   0
-  //   Magenta      (232,  0,140) -> laveste   0
-  //   Landfyll     (255,247,214) -> laveste 214
+  //   Gul sektor (255,222,23)->laveste 23, Gronn (0,166,81)->0,
+  //   Magenta (232,0,140)->0, men Landfyll (255,247,214)->214.
   // Symbolfarger har alltid minst en kanal presset i bunn.
   const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
   const kroma = mx - mn;
@@ -3216,9 +3214,8 @@ async function kjorKlaringssjekk(rutePunkter, stille){
     // BUGFIKS: sisteSegmentTider fylles forst av calculateRoute(), men
     // ruteplanleggeren kaller denne sjekken FOR den kjorer. Da var lista
     // tom eller fra en annen rute, passeringstid ga null, og
-    // tidevannskorreksjonen ble alltid 0 - koden kjorte aldri i praksis.
-    // Vi bygger derfor et eget tidsestimat naar de lagrede tidene ikke
-    // passer til ruta vi faktisk sjekker.
+    // tidevannskorreksjonen ble alltid 0. Vi bygger derfor et eget
+    // tidsestimat naar de lagrede tidene ikke passer til ruta.
     const brukLagredeTider = sisteSegmentTider.length === pts.length - 1;
     let estimerteTider = null;
     if(!brukLagredeTider){
@@ -4023,8 +4020,7 @@ async function autoPlanRoute(){
     let omrutinger = 0;
     let sisteHindring = "";
     let sisteTvangsfjernet = 0;
-    // Settes hvis eneste farbare rute gaar under en bru/spenn som er for
-    // lav for masta. Ruta tegnes likevel opp, men merkes tydelig sperret.
+    // Settes hvis eneste farbare rute gaar under en for lav bru/spenn.
     let hoydeSperret = false;
 
     while(forsok < MAKS_FORSOK){
@@ -4059,8 +4055,6 @@ async function autoPlanRoute(){
           endelig = kontrollRute.endelig;
           sisteTvangsfjernet = kontrollRute.tvangsfjernet || 0;
           hoydeSperret = true;
-          autoStatus("Tegner opp ruta som gaar under for lav bru/spenn...");
-          klaring = await kjorKlaringssjekk(endelig, true);
           break;
         }
 
@@ -4145,25 +4139,29 @@ async function autoPlanRoute(){
     // Klaringssjekken er allerede kjort inne i omrutingslokka pa noyaktig
     // denne ruta, sa vi gjenbruker resultatet i stedet for a sporre Overpass
     // en gang til. Markorene i kartet er da ogsa allerede satt.
-    let klaringTekst = "";
+    // RIKTIG REKKEFOLGE:
+    //  1) Tegn ruta (calculateRoute tegner linjer og fyller sisteSegmentTider)
+    //  2) Kjor klaringssjekken PA den ferdige ruta - dette plasserer
+    //     hindermarkorene OG gir noyaktig klaring med riktige passeringstider.
+    //     clearRoute() (da ruta ble tegnet) hadde wipet markorene, derfor ma
+    //     dette skje HER, helt til slutt.
+    //  3) Bygg statustekst fra det ferske resultatet.
+    await calculateRoute();
+
     if(mastHoyde > 0){
-      klaringTekst = klaringSammendrag(klaring, mastHoyde);
-    } else {
-      klaringTekst = klaringSammendrag(null, 0);
+      autoStatus("Sjekker bruer og luftspenn langs ruta...");
+      klaring = await kjorKlaringssjekk(endelig, true);
     }
+
+    let klaringTekst = (mastHoyde > 0)
+      ? klaringSammendrag(klaring, mastHoyde)
+      : klaringSammendrag(null, 0);
 
     // Fortell brukeren at ruta faktisk ble lagt om, og hvorfor.
     let omrutingTekst = "";
-    if(mastHoyde > 0){
-      if(omrutinger > 0){
-        omrutingTekst = " \uD83D\uDD01 Ruta ble lagt om " + omrutinger + " gang" +
-          (omrutinger > 1 ? "er" : "") + " for a unnga for lave kryssinger.";
-        if(klaring && klaring.antBad > 0){
-          omrutingTekst += " \u26D4 Etter " + MAKS_FORSOK + " forsok ligger det fortsatt " +
-            klaring.antBad + " for lav" + (klaring.antBad > 1 ? "e" : "") +
-            " kryssing" + (klaring.antBad > 1 ? "er" : "") + " pa ruta - ma loses manuelt.";
-        }
-      }
+    if(mastHoyde > 0 && omrutinger > 0){
+      omrutingTekst = " \uD83D\uDD01 Ruta ble lagt om " + omrutinger + " gang" +
+        (omrutinger > 1 ? "er" : "") + " for a unnga for lave kryssinger.";
     }
     if(nedskalert){
       omrutingTekst += " \u2139\uFE0F Cellene ble grovnet til " + faktiskCelleM.toFixed(0) +
@@ -4181,10 +4179,7 @@ async function autoPlanRoute(){
         " NM), men den gaar under bru/spenn som er for lave for masta (krever " +
         kravHoyde.toFixed(1) + " m inkl. margin). Ingen alternativ vei utenom innenfor sokeomradet. " +
         "Kontroller de rode kryssingene i kartet - vurder aa legge ned masta, finne seilopet, " +
-        "senke margin, eller sette inn egne waypoints." +
-        (ufarbare > 0 ? " \u26A0 " + ufarbare + " etappe" + (ufarbare>1?"r":"") +
-          " krysser i tillegg land eller grunne." : "") +
-        snapNote + klaringTekst + omrutingTekst);
+        "senke margin, eller sette inn egne waypoints." + snapNote + klaringTekst + omrutingTekst);
     } else if(ufarbare > 0){
       autoStatus("\u26A0 Fant rute pa " + ruteNM.toFixed(2) + " NM, men " + ufarbare + " etappe" +
         (ufarbare>1?"r":"") + " krysser fortsatt land eller grunne (vises rodt i kartet). " +
@@ -4194,8 +4189,6 @@ async function autoPlanRoute(){
         (omvei > 0.5 ? "+"+omvei.toFixed(0)+"% mot luftlinje" : "tilnaermet rett linje") +
         "). Beregnet pa " + sek + "s." + snapNote + klaringTekst + omrutingTekst);
     }
-
-    await calculateRoute();
     setTimeout(function(){ autoProgress(null); }, 1500);
 
   } catch(e){
