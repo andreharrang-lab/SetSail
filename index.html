@@ -314,7 +314,7 @@ body.sidebar-hidden #map{width:100%}
 <button class="ok" onclick="calculateRoute()">Beregn</button>
 <button onclick="window.open('https://github.com/andreharrang-lab/SetSail/blob/main/README.md', '_blank')" style="background:#0d6efd">📚 Hjelp</button>
 <button onclick="window.open('https://github.com/andreharrang-lab/SetSail/issues/new', '_blank')" style="background:#fd7e14">💬 Tilbakemelding</button>
-
+<button onclick="window.open('tool.html', '_blank')" style="background:#7048e8" title="Søkeområde-diagnose: se hvilket område ruteplanleggeren undersøker">🔍</button>
 <button onclick="showSettings()" style="background:#495057" title="Innstillinger - båtens mål, fart og segmentering">⚙️ Settings</button>
 </div>
 </header>
@@ -711,6 +711,9 @@ let orcData = [], orcFiltered = [];
 let isochroneLayers = [];
 const windCache = new Map(), currentCache = new Map(), landCache = new Map();
 let lastWindFetch = 0, lastKnownWind = {speed: 5, dir: 180};
+// Ytelsestellere - brukes til aa maale hvor tiden gaar i ruteplanleggeren.
+let landOppslagTeller = 0;   // antall isLandStyrke-kall
+let landCacheMiss = 0;       // antall som faktisk hentet flis/hoydedata
 
 function cacheKey(lat,lon,dateObj){
   const la = Math.round(lat*10)/10, lo = Math.round(lon*10)/10;
@@ -1391,10 +1394,12 @@ async function isLandKartverket(lat, lon, blockShallow){
 
 // Returnerer styrken paa utslaget: 0 = fritt, 1 = svakt, 2 = massivt.
 async function isLandStyrke(lat, lon){
+  landOppslagTeller++;
   const blockShallow = draftBlocksShallow();
   // 4 desimaler = ca 11 m. Grovere nokkel ville latt finmasket sampling kollapse til samme oppslag.
   const key = Math.round(lat*10000)/10000 + "," + Math.round(lon*10000)/10000 + "," + (blockShallow ? 'D' : 'S');
   if(landCache.has(key)) return landCache.get(key);
+  landCacheMiss++;
 
   try {
     const result = await isLandKartverket(lat, lon, blockShallow);
@@ -3703,6 +3708,11 @@ async function autoPlanRoute(){
   document.getElementById('autoCancelBtn').style.display = 'inline-block';
   autoProgress(0);
   const t0 = Date.now();
+  // Ytelsesmaaling - deklarert utenfor try slik at finally naar dem.
+  const _perfStart = performance.now();
+  const _landStart = landOppslagTeller;
+  const _missStart = landCacheMiss;
+  let _tVind = 0;
 
   try {
     const motorRaw = document.getElementById('motorSpeed').value.trim();
@@ -3760,11 +3770,18 @@ async function autoPlanRoute(){
       "), "+faktiskCelleM.toFixed(0)+" m per celle, boks "+
       widthNM.toFixed(0)+"x"+heightNM.toFixed(0)+" NM");
 
-    autoStatus("Henter vinddata...");
     const depInput = document.getElementById('departureTime').value;
     const departure = depInput ? new Date(depInput) : new Date();
-    const windSamples = await sampleWindGrid(minLat, minLon, maxLat, maxLon, departure);
-    if(autoPlanCancel) throw new Error("avbrutt");
+    // Vind brukes bare i seil-modus (stepCost returnerer d/motorfart for motor).
+    // Vi hopper derfor over de 9 vind-kallene naar motor er valgt.
+    let windSamples = [];
+    if(!isMotorMode){
+      autoStatus("Henter vinddata...");
+      const _tv = performance.now();
+      windSamples = await sampleWindGrid(minLat, minLon, maxLat, maxLon, departure);
+      _tVind = performance.now() - _tv;
+      if(autoPlanCancel) throw new Error("avbrutt");
+    }
 
     const cellLat = function(j){ return minLat + (j + 0.5) * (maxLat - minLat) / rows; };
     const cellLon = function(i){ return minLon + (i + 0.5) * (maxLon - minLon) / cols; };
@@ -4022,7 +4039,12 @@ async function autoPlanRoute(){
     //    sok gar utenom med en gang.
     // 3) Kjor soket, klaringssjekk ruta, og hvis en for lav kryssing likevel
     //    dukker opp: sperr den og sok pa nytt. Maks 4 forsok.
-    const mastHoyde = numVal('mastHeight', 0);
+    // I motorbaat-modus er mastehoyden fra seil-modus irrelevant (motorbaater
+    // har typisk 2-4 m luftdrag). Vi nullstiller den her, slik at hele
+    // Overpass-hentingen og den iterative bru-omrutingen hoppes over.
+    // Trenger du a sjekke antenne-/radarhoyde, bruk knappen
+    // "Sjekk bruer og kraftlinjer" manuelt - den virker uansett modus.
+    const mastHoyde = isMotorMode ? 0 : numVal('mastHeight', 0);
     const klaringsMargin = numVal('clearanceMargin', 1);
     const kravHoyde = mastHoyde + klaringsMargin;
     const MAKS_FORSOK = 4;
@@ -4236,6 +4258,23 @@ async function autoPlanRoute(){
     bulkAdd = false;
     document.getElementById('autoPlanBtn').style.display = 'inline-block';
     document.getElementById('autoCancelBtn').style.display = 'none';
+
+    // Ytelsessammendrag - vises alltid, ogsa ved avbrudd/feil.
+    const _total = ((performance.now() - _perfStart) / 1000).toFixed(1);
+    const _land = landOppslagTeller - _landStart;
+    const _miss = landCacheMiss - _missStart;
+    const _motor = document.body.classList.contains('motor-mode');
+    console.log(
+      "%c[Ytelse] Ruteplanlegger " + _total + "s  |  " +
+      "vind-sampling " + (_tVind/1000).toFixed(1) + "s  |  " +
+      "land-oppslag " + _land + " (" + _miss + " ferske fliser, " + (_land - _miss) + " fra cache)  |  " +
+      "modus: " + (_motor ? "motor" : "seil"),
+      "color:#0b3d66;font-weight:bold"
+    );
+    if(_miss > 0){
+      console.log("%c[Ytelse] Landdeteksjon er hovedkostnaden. Ferske fliser fra Kartverket = " +
+        _miss + ". Grovere celleopplosning gir storst gevinst.", "color:#6c757d");
+    }
   }
 }
 
