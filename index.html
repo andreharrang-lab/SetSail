@@ -284,6 +284,14 @@ body.sidebar-hidden #map{width:100%}
     </div>
     <div style="font-size:10px;color:#888">Mastehøyde over vannlinjen. Dypgang ≥ 1,0 m gjør at ruta unngår grunner.</div>
 
+    <div style="font-size:11px;color:#0b3d66;font-weight:bold;margin:16px 0 6px;text-transform:uppercase;letter-spacing:.5px;">⛽ Drivstofforbruk</div>
+    <div class="row"><label>Forbruk l/t</label><input type="number" id="fuelLph" placeholder="0 = ikke beregn" step="0.1" min="0" value="0"></div>
+    <div class="row"><label>Pris pr liter</label><input type="number" id="fuelPrice" placeholder="kr/l" step="0.1" min="0" value="0"></div>
+    <div style="font-size:10px;color:#888;margin:-2px 0 4px;">
+    Forbruket regnes kun for tiden båten faktisk går på motor. I seilbåt-modus
+    skilles seil og motor automatisk. Sett l/t til 0 for å slå av.
+    </div>
+
     <div style="font-size:11px;color:#0b3d66;font-weight:bold;margin:16px 0 6px;text-transform:uppercase;letter-spacing:.5px;">Visning</div>
     <div class="row hide-in-motor-mode">
     <label style="flex:1;font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer;">
@@ -439,6 +447,7 @@ Data fra OpenStreetMap. <b>Kontroller alltid mot sjøkart og skilting.</b>
 </div>
 <div id="currentEffect" class="current-effect current-neutral">Klikk Beregn for strom-effekt</div>
 <div id="etaInfo" style="font-size:11px;color:#0b3d66;margin-top:6px;text-align:center;font-weight:bold;"></div>
+<div id="fuelInfo" style="font-size:12px;margin-top:6px;text-align:center;display:none;background:#fff3e0;border-radius:5px;padding:6px;"></div>
 </div>
 
 <div class="card">
@@ -639,10 +648,20 @@ window.addEventListener('load', function(){
   if(savedMast !== null) document.getElementById('mastHeight').value = savedMast;
   if(savedDraft !== null) document.getElementById('draft').value = savedDraft;
 
-  ['mastHeight','draft'].forEach(function(id){
+  // Husk drivstoffverdier mellom okter.
+  const lagreKart = {mastHeight:'setsail_mast', draft:'setsail_draft',
+                     fuelLph:'setsail_fuel_lph', fuelPrice:'setsail_fuel_price'};
+  const savedLph = localStorage.getItem('setsail_fuel_lph');
+  const savedPrice = localStorage.getItem('setsail_fuel_price');
+  if(savedLph !== null) document.getElementById('fuelLph').value = savedLph;
+  if(savedPrice !== null) document.getElementById('fuelPrice').value = savedPrice;
+
+  Object.keys(lagreKart).forEach(function(id){
     const el = document.getElementById(id);
     if(el) el.addEventListener('change', function(){
-      localStorage.setItem(id === 'mastHeight' ? 'setsail_mast' : 'setsail_draft', el.value);
+      localStorage.setItem(lagreKart[id], el.value);
+      // Ny drivstoff/prisverdi -> regn ruta pa nytt sa tallene oppdateres.
+      if((id === 'fuelLph' || id === 'fuelPrice') && waypoints.length >= 2) calculateRoute();
     });
   });
 
@@ -1127,6 +1146,8 @@ function clearRoute(){
   });
   setEl('etaInfo', "");
   setEl('currentEffect', "Klikk Beregn for strom-effekt");
+  const fInfo = document.getElementById('fuelInfo');
+  if(fInfo) fInfo.style.display = 'none';
   if(!bulkAdd) refreshAutoSelects();
 }
 
@@ -2012,6 +2033,7 @@ async function calculateRoute(){
     let totalNM = 0, totalH = 0, totalHnoCurrent = 0;
     let windSum = 0, spdSum = 0, n = 0;
     let maxWaveTotal = 0;
+    let totalMotorHours = 0, totalSailHours = 0;   // for drivstoffberegning
     let currentTime = new Date(departure.getTime());
 
     for(let i=0;i<pts.length-1;i++){
@@ -2023,6 +2045,7 @@ async function calculateRoute(){
       let etappeNM = 0, etappeH = 0, etappeHnoCur = 0;
       let etappeWindSpd = 0, etappeWindDir = 0, etappeWindCount = 0;
       let etappeMotorNM = 0, etappeSailNM = 0;
+      let etappeMotorHours = 0;   // faktisk tid pa motor (med strom)
       let etappeMaxWave = 0;
       let etappeCourseSum = 0, etappeTwaSum = 0;
       let etappeSailSpeedSum = 0, etappeSubCount = 0;
@@ -2075,6 +2098,7 @@ async function calculateRoute(){
         etappeNM += subNM;
         etappeH += subHours;
         etappeHnoCur += subHoursNoCur;
+        if(vmgRes.switched) etappeMotorHours += subHours;   // motor gikk her
         if(wind.speed != null){
           etappeWindSpd += wind.speed;
           etappeWindDir += wind.dir;
@@ -2182,7 +2206,21 @@ async function calculateRoute(){
       totalNM += etappeNM;
       totalH += etappeH;
       totalHnoCurrent += etappeHnoCur;
+      totalMotorHours += etappeMotorHours;
+      totalSailHours += Math.max(0, etappeH - etappeMotorHours);
       if(avgWindSpd > 0){ windSum += avgWindSpd; spdSum += avgSog; n++; }
+
+      // Drivstoff for denne etappen (kun motortid).
+      const fuelLph = numVal('fuelLph', 0);
+      const fuelPrice = numVal('fuelPrice', 0);
+      let fuelNote = '';
+      if(fuelLph > 0 && etappeMotorHours > 0.001){
+        const etappeLiter = fuelLph * etappeMotorHours;
+        const etappeKr = etappeLiter * fuelPrice;
+        fuelNote = '\u26FD ' + etappeLiter.toFixed(1) + ' l motor (' +
+          fmtT(etappeMotorHours) + ' t)' +
+          (fuelPrice > 0 ? ' \u2248 ' + etappeKr.toFixed(0) + ' kr' : '') + '<br>';
+      }
 
       const tFmt = function(d){ return d.toLocaleString('nb-NO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); };
       const sailPct = sailPctNum.toFixed(0);
@@ -2258,6 +2296,7 @@ async function calculateRoute(){
         zigzagNote+
         (jibeAdvice ? '<div style="background:#fff3cd;padding:4px;border-radius:3px;margin:4px 0;font-size:11px;"><b>'+jibeAdvice.type+'-tips:</b> Seil i Z-monster med TWA '+jibeAdvice.bestTWA+' grader - <b style="color:#2b8a3e">sparer '+jibeAdvice.savedMin+' min ('+jibeAdvice.gainPct+'% raskere)</b><br>Direkte: '+jibeAdvice.directSpeed+' kn. Taktisk: '+jibeAdvice.optimalSpeed+' kn ('+jibeAdvice.extraDistancePct+'% lengre)</div>' : '')+
         modeStr+'<br>'+
+        fuelNote+
         'Tid: '+fmtT(etappeH)+' (uten strom: '+fmtT(etappeHnoCur)+') '+currStr+'</div>';
     }
 
@@ -2308,6 +2347,34 @@ async function calculateRoute(){
       ? '<br>Mastehoyde '+(mastVal>0?mastVal.toFixed(1)+' m':'ikke satt')+' | Dypgang '+(draftVal>0?draftVal.toFixed(1)+' m':'ikke satt')
       : '';
     setHtml('etaInfo', 'Avgang: '+depFmt+' -> ETA: '+etaFmt+'<br>'+modeLabel+boatLabel);
+
+    // ===== TOTALT DRIVSTOFFORBRUK =====
+    const fuelInfoEl = document.getElementById('fuelInfo');
+    const lph = numVal('fuelLph', 0);
+    const pris = numVal('fuelPrice', 0);
+    if(fuelInfoEl){
+      if(lph > 0 && totalMotorHours > 0.001){
+        const liter = lph * totalMotorHours;
+        const kr = liter * pris;
+        const motorPctT = totalH > 0 ? (totalMotorHours / totalH * 100) : 0;
+        let html = '<b>\u26FD Drivstoff:</b> ' + liter.toFixed(1) + ' liter';
+        if(pris > 0) html += ' \u2248 <b>' + kr.toFixed(0) + ' kr</b>';
+        html += '<br><span style="font-size:10px;color:#666">' +
+          'Motor ' + fmtT(totalMotorHours) + ' t (' + motorPctT.toFixed(0) + '% av tida)';
+        if(!isMotorMode && totalSailHours > 0.001){
+          html += ' \u00B7 seil ' + fmtT(totalSailHours) + ' t';
+        }
+        html += ' \u00B7 ' + lph.toFixed(1) + ' l/t</span>';
+        fuelInfoEl.innerHTML = html;
+        fuelInfoEl.style.display = 'block';
+      } else if(lph > 0 && !isMotorMode){
+        // Drivstoff er satt, men ruta gikk helt for seil.
+        fuelInfoEl.innerHTML = '<b>\u26FD Drivstoff:</b> 0 liter - hele ruta gikk for seil \u26F5';
+        fuelInfoEl.style.display = 'block';
+      } else {
+        fuelInfoEl.style.display = 'none';
+      }
+    }
 
     if(typeof trackPoints !== 'undefined' && trackPoints.length){
       const last = trackPoints[trackPoints.length-1];
