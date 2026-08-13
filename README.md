@@ -2,6 +2,10 @@
 
 👉 https://oddandre.github.io/SetSail/ 👈
 
+Update 09.08.2026:
+* Now you can add consumption and cost and it will calculate the total cost for the route. For sail it will also take into condisderation if you are partly sailing and motoring
+* Possible to take a backup of all your routes and favourites. And export/import routes to in example a plotter onboard your boat
+
 Update 04.08.2026:
 * Possible to see nm and time between two waypoints.
 * Possible to add favourite places on the map and store for later use.
